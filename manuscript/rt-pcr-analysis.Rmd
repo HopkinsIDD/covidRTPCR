@@ -18,23 +18,12 @@ library(rstan)
 
 n_iter <- 1e4
 n_warmup <- 1e4-5e3
-p_adapt_delta <- 0.999
+p_adapt_delta <- 0.99
 n_max_treedepth <- 20
-T_max <- 26
+T_max <- 21
 
-test_dat <- read_csv("data/antibody-test-data.csv")
-
-expanded_test_dat <- c()
-for(i in 1:nrow(test_dat)){
-    tmp <- tibble(t=test_dat$day[i],
-                  # t=(test_dat$max_day[i]+test_dat$min_day[i]-1)/2,
-                  t_min=test_dat$day_min[i],
-                  t_max=test_dat$day_max[i],
-                  test_pos=sample(c(rep(1,test_dat$test_pos[i]),
-                                    rep(0, test_dat$n[i]-test_dat$test_pos[i])),
-                                  test_dat$n[i]))
-    expanded_test_dat <- bind_rows(expanded_test_dat, tmp)
-}
+test_dat <- read_csv("data/antibody-test-data.csv") %>% 
+    mutate(study_idx=study %>% as.factor() %>% as.numeric())
 ```
 
 In this paper, we will try to determine the probability that someone has covid-19 given a negative RT-PCR test.
@@ -70,25 +59,30 @@ We use Stan for this analysis.
 ## fit a model to find the overall seroincidence across all observations
 npv_onset_model <- stan_model("Stan/npv-fixed-onset.stan")
 
-test_dat2 <- test_dat %>% 
-    group_by(day) %>% 
-    summarize(test_pos=sum(test_pos),
-              n=sum(n))
+# test_dat2 <- test_dat %>% 
+#     group_by(day) %>% 
+#     summarize(test_pos=sum(test_pos),
+#               n=sum(n))
 
 npv_est <- sampling(npv_onset_model,
-                    data=list(N=nrow(test_dat2),
+                    data=list(N=nrow(test_dat),
+                              J=max(test_dat$study_idx),
                               T_max=T_max,
-                              test_pos=test_dat2$test_pos,
-                              test_n=test_dat2$n,
-                              t_symp_test=test_dat2$day,
+                              test_n=test_dat$n,
+                              test_pos=test_dat$test_pos,
+                              study_idx=test_dat$study_idx,
+                              t_symp_test=test_dat$day,
                               exposed_n=686,
-                              exposed_pos=77
+                              exposed_pos=77,
+                              t_exp_symp=5
                     ),
                     iter=n_iter,
                     warmup=n_warmup,
                     control=list(adapt_delta=p_adapt_delta,
                                  max_treedepth=n_max_treedepth),
                     save_warmup=F)
+
+loo::extract_log_lik(npv_est) %>% loo::loo()
 
 rm(npv_onset_model)
 ```

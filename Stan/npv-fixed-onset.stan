@@ -19,12 +19,15 @@
 // numbers to estimate the attack rate of covid-19 from other papers.
 data {
     int<lower=1> N;
+    int<lower=1> J; // number of studies
     int<lower=1> T_max;
     int<lower=1> test_n[N];
     int<lower=0> test_pos[N];
     int<lower=0> t_symp_test[N];
+    int<lower=1> study_idx[N];
     int<lower=1> exposed_n;
     int<lower=0> exposed_pos;
+    real<lower=0> t_exp_symp;
 }
 
 // 't_new' is the log-time since exposure for the predicted times since exposure.
@@ -49,7 +52,7 @@ transformed data {
     }
 
     for(i in 1:N){
-        t[i] = t_symp_test[i]+5;
+        t[i] = t_symp_test[i]+t_exp_symp;
         t_ort[i] = (log(t[i])-t_mean)/t_sd;
     }
 }
@@ -58,6 +61,8 @@ transformed data {
 // 'attack_rate' is the probability of infection given exposure.
 parameters{
     real beta_0;
+    real<lower=0> sigma;
+    real beta_j[J];
     real beta_1;
     real beta_2;
     real beta_3;
@@ -74,10 +79,18 @@ transformed parameters{
 }
 
 model {
-    exposed_pos ~ binomial(exposed_n, attack_rate);
+    vector[N] mu;
+    // for(i in 1:N){
+    //     test_pos[i] ~ binomial_logit(test_n[i], beta_j[study_idx[i]]+beta_1*t_ort[i]+beta_2*t_ort[i]^2+beta_3*t_ort[i]^3);
+    // }
     for(i in 1:N){
-        test_pos[i] ~ binomial_logit(test_n[i], beta_0+beta_1*t_ort[i]+beta_2*t_ort[i]^2+beta_3*t_ort[i]^3);
+        mu[i] = beta_j[study_idx[i]]+beta_1*t_ort[i]+beta_2*t_ort[i]^2+beta_3*t_ort[i]^3;
     }
+    target += binomial_lpmf(exposed_pos | exposed_n, attack_rate);
+    target += binomial_logit_lpmf(test_pos | test_n, mu);
+    target += normal_lpdf(beta_j | beta_0, sigma);
+    target += normal_lpdf(beta_0 | 0, 1);
+    // beta_j ~ normal(beta_0, sigma);
 }
 
 // 'sens' is the sensitivity of the RT-PCR over time for the predicted values.
@@ -95,7 +108,7 @@ generated quantities{
     }
 
     for(i in 1:T_max){
-        npv[i]=(1-attack_rate)/((1-sens[i])*attack_rate+(1-attack_rate));
+        npv[i] = (1-attack_rate)/((1-sens[i])*attack_rate+(1-attack_rate));
     }
 
     for(i in 1:N){
