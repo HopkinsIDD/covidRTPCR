@@ -34,7 +34,7 @@ In this paper, we will try to determine the probability that someone has covid-1
 
 ```{r raw-figures}
 ggplot(data=test_dat, aes(x=day, y=pct_pos, size=n, color=study)) +
-    geom_point() +
+    geom_point(alpha=0.4) +
     scale_x_continuous("Days since symptom onset",
                        breaks=seq(0,21,7)) +
     scale_y_continuous("Sensitivity of the RT-PCR test") +
@@ -59,11 +59,6 @@ We use Stan for this analysis.
 ## fit a model to find the overall seroincidence across all observations
 npv_onset_model <- stan_model("Stan/npv-fixed-onset.stan")
 
-# test_dat2 <- test_dat %>% 
-#     group_by(day) %>% 
-#     summarize(test_pos=sum(test_pos),
-#               n=sum(n))
-
 npv_est <- sampling(npv_onset_model,
                     data=list(N=nrow(test_dat),
                               J=max(test_dat$study_idx),
@@ -74,7 +69,8 @@ npv_est <- sampling(npv_onset_model,
                               t_symp_test=test_dat$day,
                               exposed_n=686,
                               exposed_pos=77,
-                              t_exp_symp=5
+                              t_exp_symp=5,
+                              spec=1
                     ),
                     iter=n_iter,
                     warmup=n_warmup,
@@ -83,8 +79,6 @@ npv_est <- sampling(npv_onset_model,
                     save_warmup=F)
 
 loo::extract_log_lik(npv_est) %>% loo::loo()
-
-rm(npv_onset_model)
 ```
 
 ```{r all-conditionals}
@@ -190,5 +184,133 @@ ggplot(plot_dat, aes(x=days_since_exposure)) +
 
 
 Due to the decline in sensitivity over time, the RT-PCR test is best deployed about a week after exposure.
-A day or two after exposure (3 or 4 days prior to symptoms), the test may have no utility at all, and thus the probability of having been infected is would be the same with or without an RT-PCR, in our case about 15%.
+A day or two after exposure (3 or 4 days prior to symptoms), the test may have no utility at all, and thus the probability of having been infected is would be the same with or without an RT-PCR, in our case about 11%.
 Seven to nine days after exposure (roughly 2 to 4 days after symptom onset), the negative predictive value is around 95%, meaning there is about a 5% chance of actually being covid-19 positive despite testing negative.
+
+### Sensitivity analyses
+
+#### Specificity not 100%
+
+```{r sens-analysis-spec, cache=T, eval=T}
+spec_est <- sampling(npv_onset_model,
+                     data=list(N=nrow(test_dat),
+                               J=max(test_dat$study_idx),
+                               T_max=T_max,
+                               test_n=test_dat$n,
+                               test_pos=test_dat$test_pos,
+                               study_idx=test_dat$study_idx,
+                               t_symp_test=test_dat$day,
+                               exposed_n=686,
+                               exposed_pos=77,
+                               t_exp_symp=5,
+                               spec=0.9
+                     ),
+                     iter=n_iter,
+                     warmup=n_warmup,
+                     control=list(adapt_delta=p_adapt_delta,
+                                  max_treedepth=n_max_treedepth),
+                     save_warmup=F)
+```
+
+```{r all-conditionals-spec}
+# loo::extract_log_lik(npv_est) %>% loo::loo()
+## sensitivity (sens) of PCR: P(PCR+ | covid+)
+## false negative rate (fnr) of PCR: P(PCR- | covid+) = 1 - sens
+sens_spec <- extract(spec_est, pars="sens")[[1]]
+fnr_spec <- 1-sens_spec
+
+## negative predictive value (npv) of PCR: P(covid- | PCR-)
+## false omission rate (FOR) of PCR: P(covid+ | PCR-) = 1 - npv
+npv_spec <- extract(spec_est, pars="npv")[[1]]
+for_spec <- 1-npv_spec
+
+## attack rate: P(covid+)
+## P(covid-) = 1 - attack_rate
+ar_spec <- extract(spec_est, pars="attack_rate")[[1]] %>% as.vector()
+```
+
+```{r plot-dat-spec}
+plot_dat_spec <- as_tibble(sens_spec) %>%
+    gather("days", "sens") %>%
+    mutate(days_since_exposure=gsub(pattern="V", "", days) %>% as.numeric) %>%
+    bind_cols(as_tibble(npv_spec) %>%
+                  gather("days", "npv") %>%
+                  mutate(ar=rep(ar_spec, T_max)) %>% 
+                  select(-days)) %>% 
+    group_by(days_since_exposure) %>%
+    summarise(fnr_med=median(1-sens),
+              fnr_lb=quantile(1-sens,probs=.025),
+              fnr_ub=quantile(1-sens,probs=.975),
+              for_med=median(1-npv),
+              for_lb=quantile(1-npv,probs=.025),
+              for_ub=quantile(1-npv,probs=.975),
+              rr_med=median(1-(1-npv)/ar),
+              rr_lb=quantile(1-(1-npv)/ar,probs=.025),
+              rr_ub=quantile(1-(1-npv)/ar,probs=.975),
+              abs_med=median(ar-(1-npv)),
+              abs_lb=quantile(ar-(1-npv),probs=.025),
+              abs_ub=quantile(ar-(1-npv),probs=.975)) %>% 
+    mutate(spec=0.9) %>% 
+    bind_rows(plot_dat %>% mutate(spec=1))
+
+# paste0("Median (95% CI) of attack rate: ", median(100*ar_spec) %>% round(), "% (",
+#        quantile(100*ar_spec, probs=.025) %>% round(), ", ",
+#        quantile(100*ar_spec, probs=.975) %>% round(), "%)")
+# knitr::kable(plot_dat_spec %>%
+#                  rename(Days=days_since_exposure) %>% 
+#                  mutate_at(vars(2:ncol(plot_dat_spec)), function(x) paste0(round(100*x), "%")),
+#              digits=0)
+```
+
+```{r fnr-figure-spec}
+ggplot(data=plot_dat_spec, aes(x=days_since_exposure, color=as.factor(spec))) +
+    geom_vline(aes(xintercept=5), linetype="dashed") +
+    geom_errorbar(aes(ymin=fnr_lb, ymax=fnr_ub)) +
+    geom_point(aes(y=fnr_med)) +
+    scale_x_continuous("",
+                       breaks=seq(0, 21, 7),
+                       limits=c(0,21.5)) +
+    scale_y_continuous("Probability RT-PCR negative,\ngiven covid-19 positive",
+                       limits=c(0,1)) +
+    theme_bw() +
+    theme(axis.text.y=element_text(color="black"),
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks=element_blank())
+```
+
+With no data on RT-PCR to time prior to symptom onset, the estimates of sensitivity at or below day five are low with large credible intervals.
+
+```{r npv-figure-spec}
+ggplot(data=plot_dat_spec,
+       aes(x=days_since_exposure, color=as.factor(spec))) +
+    geom_vline(aes(xintercept=5), linetype="dashed") +
+    geom_errorbar(aes(ymax=for_lb, ymin=for_ub), alpha=0.5) +
+    geom_point(aes(y=for_med)) +
+    scale_x_continuous("Days since exposure",
+                       breaks=seq(0, 21, 7),
+                       limits=c(0,21.5)) +
+    scale_y_continuous("Probability infected,\ngiven RT-PCR negative",
+                       limits=c(0, 0.16),
+                       breaks=seq(0,0.15, 0.05)) +
+    scale_color_discrete("Specificity",
+                         labels=c("90%", "100%")) +
+    theme_bw() +
+    theme(axis.text=element_text(color="black"))
+
+gridExtra::grid.arrange(fnr_fig_spec, for_fig_spec)
+
+ggplot(plot_dat_spec, aes(x=days_since_exposure)) +
+    geom_hline(aes(yintercept=1), linetype="dashed") +
+    geom_errorbar(aes(ymax=1-rr_lb, ymin=1-rr_ub), color="gray30") +
+    geom_point(aes(y=1-rr_med)) +
+    scale_x_continuous("Days since exposure",
+                       breaks=seq(0, 21, 7),
+                       limits=c(0,21.5)) +
+    scale_y_log10("Relative risk of having a negative RT-PCR test",
+                  breaks=2^c(-3:1),
+                  labels=c("1/8", "1/4", "1/2", "1", "2")) +
+    coord_cartesian(ylim=c(2^-3, 2^1)) +
+    theme_bw() +
+    theme(axis.text=element_text(color="black"))
+```

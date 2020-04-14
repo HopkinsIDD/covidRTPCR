@@ -28,6 +28,7 @@ data {
     int<lower=1> exposed_n;
     int<lower=0> exposed_pos;
     real<lower=0> t_exp_symp;
+    real spec;
 }
 
 // 't_new' is the log-time since exposure for the predicted times since exposure.
@@ -73,19 +74,18 @@ parameters{
 // to be positive for the first 4 days since exposure.
 transformed parameters{
     real<lower=0> db_dt[3];
-
-    for(i in 1:3)
-        db_dt[i] = beta_1+2*beta_2*(log(i+1)-t_mean)/t_sd+3*beta_3*((log(i+1)-t_mean)/t_sd)^2;
-}
-
-model {
     vector[N] mu;
-    // for(i in 1:N){
-    //     test_pos[i] ~ binomial_logit(test_n[i], beta_j[study_idx[i]]+beta_1*t_ort[i]+beta_2*t_ort[i]^2+beta_3*t_ort[i]^3);
-    // }
+
+    for(i in 1:3){
+        db_dt[i] = beta_1+2*beta_2*(log(i+1)-t_mean)/t_sd+3*beta_3*((log(i+1)-t_mean)/t_sd)^2;
+    }
+
     for(i in 1:N){
         mu[i] = beta_j[study_idx[i]]+beta_1*t_ort[i]+beta_2*t_ort[i]^2+beta_3*t_ort[i]^3;
     }
+}
+
+model {
     target += binomial_lpmf(exposed_pos | exposed_n, attack_rate);
     target += binomial_logit_lpmf(test_pos | test_n, mu);
     target += normal_lpdf(beta_j | beta_0, sigma);
@@ -108,10 +108,10 @@ generated quantities{
     }
 
     for(i in 1:T_max){
-        npv[i] = (1-attack_rate)/((1-sens[i])*attack_rate+(1-attack_rate));
+        npv[i] = (spec*(1-attack_rate))/((1-sens[i])*attack_rate+spec*(1-attack_rate));
     }
 
     for(i in 1:N){
-        log_lik[i] = binomial_logit_lpmf(test_pos[i] | test_n[i], beta_0+beta_1*t_ort[i]+beta_2*t_ort[i]^2+beta_3*t_ort[i]^3);
+        log_lik[i] = binomial_logit_lpmf(test_pos[i] | test_n[i], mu[i]);
     }
 }
