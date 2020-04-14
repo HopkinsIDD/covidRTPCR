@@ -27,7 +27,7 @@ data {
     int<lower=1> study_idx[N];
     int<lower=1> exposed_n;
     int<lower=0> exposed_pos;
-    real<lower=0> t_exp_symp;
+    int<lower=1> t_exp_symp;
     real spec;
 }
 
@@ -73,10 +73,10 @@ parameters{
 // 'db_dt' is the first derivative of the log-time polynomial, which is restricted
 // to be positive for the first 4 days since exposure.
 transformed parameters{
-    real<lower=0> db_dt[3];
+    real<lower=0> db_dt[t_exp_symp-2];
     vector[N] mu;
 
-    for(i in 1:3){
+    for(i in 1:(t_exp_symp-2)){
         db_dt[i] = beta_1+2*beta_2*(log(i+1)-t_mean)/t_sd+3*beta_3*((log(i+1)-t_mean)/t_sd)^2;
     }
 
