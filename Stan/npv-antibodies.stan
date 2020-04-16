@@ -69,12 +69,7 @@ parameters{
 // 'db_dt' is the first derivative of the log-time polynomial, which is restricted
 // to be positive for the first 4 days since exposure.
 transformed parameters{
-    real<lower=0> db_dt[t_exp_symp-2];
     vector[N] mu;
-
-    for(i in 1:(t_exp_symp-2)){
-        db_dt[i] = beta_1+2*beta_2*(log(i+1)-t_mean)/t_sd+3*beta_3*((log(i+1)-t_mean)/t_sd)^2;
-    }
 
     for(i in 1:N){
         mu[i] = beta_j[study_idx[i]]+beta_1*t_ort[i]+beta_2*t_ort[i]^2+beta_3*t_ort[i]^3;

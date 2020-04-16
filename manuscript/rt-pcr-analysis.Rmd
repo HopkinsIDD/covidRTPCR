@@ -1,7 +1,7 @@
 ---
 title: "Probability of covid-19 infection given RT-PCR negative"
 author: "Stephen A Lauer"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
@@ -22,23 +22,62 @@ p_adapt_delta <- 0.99
 n_max_treedepth <- 20
 T_max <- 21
 
-test_dat <- read_csv("data/antibody-test-data.csv") %>% 
-    mutate(study_idx=study %>% as.factor() %>% as.numeric())
+source("R/utils.R")
+
+pcr_dat <- read_csv("data/antibody-test-data.csv") %>% 
+    filter(grepl("RT_PCR", test), n > 0) %>% 
+    mutate(study_idx=paste(study, test, sep="_") %>% as.factor()
+           %>% as.numeric(),
+           pct_pos=test_pos/n)
+
+elisa_dat <- read_csv("data/antibody-test-data.csv") %>% 
+    filter(!grepl("RT_PCR", test), n > 0) %>% 
+    mutate(study_idx=paste(study, test, sep="_") %>% as.factor()
+           %>% as.numeric(),
+           pct_pos=test_pos/n)
+
+igg_dat <- read_csv("data/antibody-test-data.csv") %>% 
+    filter(test=="IgG", n > 0) %>% 
+    mutate(study_idx=paste(study, test, sep="_") %>% as.factor()
+           %>% as.numeric(),
+           pct_pos=test_pos/n)
+
+igm_dat <- read_csv("data/antibody-test-data.csv") %>% 
+    filter(test=="IgM", n > 0) %>% 
+    mutate(study_idx=paste(study, test, sep="_") %>% as.factor()
+           %>% as.numeric(),
+           pct_pos=test_pos/n)
 ```
 
 In this paper, we will try to determine the probability that someone has covid-19 given a negative RT-PCR test.
 
-### Methods
+## Methods
 
-[Zhao et al. (2020)](https://academic.oup.com/cid/advance-article/doi/10.1093/cid/ciaa344/5812996) and [Liu et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.06.20031856v1) looked at the sensitivity of the RT-PCR (and ELISAs) by time since symptom onset.
+[Zhao et al. (2020)](https://academic.oup.com/cid/advance-article/doi/10.1093/cid/ciaa344/5812996), [Liu et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.06.20031856v1), [Guo et al. (2020)](https://academic.oup.com/cid/article-abstract/doi/10.1093/cid/ciaa310/5810754), and [Wölfel et al. (2020)](https://www.nature.com/articles/s41586-020-2196-x) looked at the sensitivity of the RT-PCR (and ELISAs) by time since symptom onset.
 
 ```{r raw-figures}
-ggplot(data=test_dat, aes(x=day, y=pct_pos, size=n, color=study)) +
+ggplot(data=pcr_dat, aes(x=day, y=pct_pos, size=n, color=study)) +
+    facet_grid(.~test) +
     geom_point(alpha=0.4) +
     scale_x_continuous("Days since symptom onset",
-                       breaks=seq(0,21,7)) +
+                       breaks=seq(0,35,7)) +
     scale_y_continuous("Sensitivity of the RT-PCR test") +
     scale_size_continuous("Number of\nobservations") +
+    scale_color_manual("Study",
+                       values=cbbPalette[-1]) +
+    guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+    theme_bw()
+
+ggplot(data=elisa_dat, aes(x=day, y=pct_pos, size=n, color=study)) +
+    facet_grid(.~test) +
+    geom_point(alpha=0.4) +
+    scale_x_continuous("Days since symptom onset",
+                       breaks=seq(0,35,7)) +
+    scale_y_continuous("Sensitivity of the antibody test") +
+    scale_size_continuous("Number of\nobservations") +
+    scale_color_manual("Study",
+                       values=cbbPalette[-1]) +
+    guides(colour = guide_legend(override.aes = list(alpha = 1))) +
     theme_bw()
 ```
 
@@ -53,87 +92,33 @@ From this, we can find the probability of having a covid-19 infection despite be
 
 We use Stan for this analysis.
 
-### Results
+## Results
 
-```{r fixed-onset-stan-b, cache=T, eval=T}
+```{r npv-fixed-onset, cache=T, eval=T, include=F}
 ## fit a model to find the overall seroincidence across all observations
 npv_onset_model <- stan_model("Stan/npv-fixed-onset.stan")
 
-npv_est <- sampling(npv_onset_model,
-                    data=list(N=nrow(test_dat),
-                              J=max(test_dat$study_idx),
-                              T_max=T_max,
-                              test_n=test_dat$n,
-                              test_pos=test_dat$test_pos,
-                              study_idx=test_dat$study_idx,
-                              t_symp_test=test_dat$day,
-                              exposed_n=686,
-                              exposed_pos=77,
-                              t_exp_symp=5,
-                              spec=1
-                    ),
-                    iter=n_iter,
-                    warmup=n_warmup,
-                    control=list(adapt_delta=p_adapt_delta,
-                                 max_treedepth=n_max_treedepth),
-                    save_warmup=F)
-
-loo::extract_log_lik(npv_est) %>% loo::loo()
-```
-
-```{r all-conditionals}
-# loo::extract_log_lik(npv_est) %>% loo::loo()
-## sensitivity (sens) of PCR: P(PCR+ | covid+)
-## false negative rate (fnr) of PCR: P(PCR- | covid+) = 1 - sens
-sens <- extract(npv_est, pars="sens")[[1]]
-
-## negative predictive value (npv) of PCR: P(covid- | PCR-)
-## false omission rate (FOR) of PCR: P(covid+ | PCR-) = 1 - npv
-npv <- extract(npv_est, pars="npv")[[1]]
-
-## incubation time
-# inc_time <- extract(npv_est, pars="t_exp_symp")[[1]]
-inc_time <- 5
-
-## attack rate: P(covid+)
-## P(covid-) = 1 - attack_rate
-attack_rate <- extract(npv_est, pars="attack_rate")[[1]] %>% as.vector()
-```
-
-
-```{r plot-dat}
-plot_dat <- as_tibble(sens) %>%
-    gather("days", "sens") %>%
-    mutate(days_since_exposure=gsub(pattern="V", "", days) %>% as.numeric) %>%
-    bind_cols(as_tibble(npv) %>%
-                  gather("days", "npv") %>%
-                  mutate(ar=rep(attack_rate, T_max)) %>% 
-                  select(-days)) %>% 
-    group_by(days_since_exposure) %>%
-    summarise(fnr_med=median(1-sens),
-              fnr_lb=quantile(1-sens,probs=.025),
-              fnr_ub=quantile(1-sens,probs=.975),
-              for_med=median(1-npv),
-              for_lb=quantile(1-npv,probs=.025),
-              for_ub=quantile(1-npv,probs=.975),
-              rr_med=median(1-(1-npv)/ar),
-              rr_lb=quantile(1-(1-npv)/ar,probs=.025),
-              rr_ub=quantile(1-(1-npv)/ar,probs=.975),
-              abs_med=median(ar-(1-npv)),
-              abs_lb=quantile(ar-(1-npv),probs=.025),
-              abs_ub=quantile(ar-(1-npv),probs=.975))
-
-paste0("Median (95% CI) of attack rate: ", median(100*attack_rate) %>% round(), "% (",
-       quantile(100*attack_rate, probs=.025) %>% round(), ", ",
-       quantile(100*attack_rate, probs=.975) %>% round(), "%)")
-knitr::kable(plot_dat %>%
-                 rename(Days=days_since_exposure) %>% 
-                 mutate_at(vars(2:ncol(plot_dat)), function(x) paste0(round(100*x), "%")),
-             digits=0)
+main_analysis <- make_analysis_data(stan_model=npv_onset_model,
+                                    data_list=list(N=nrow(pcr_dat),
+                                                   J=max(pcr_dat$study_idx),
+                                                   T_max=T_max,
+                                                   test_n=pcr_dat$n,
+                                                   test_pos=pcr_dat$test_pos,
+                                                   study_idx=pcr_dat$study_idx,
+                                                   t_symp_test=pcr_dat$day,
+                                                   exposed_n=686,
+                                                   exposed_pos=77,
+                                                   t_exp_symp=5,
+                                                   spec=1),
+                                    iter=n_iter,
+                                    warmup=n_warmup,
+                                    control=list(adapt_delta=p_adapt_delta,
+                                                 max_treedepth=n_max_treedepth),
+                                    save_warmup=F)
 ```
 
 ```{r fnr-figure}
-fnr_fig <- ggplot(data=plot_dat, aes(x=days_since_exposure)) +
+fnr_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
     geom_errorbar(aes(ymin=fnr_lb, ymax=fnr_ub), color="gray30") +
     geom_point(aes(y=fnr_med)) +
@@ -152,7 +137,7 @@ fnr_fig <- ggplot(data=plot_dat, aes(x=days_since_exposure)) +
 With no data on RT-PCR to time prior to symptom onset, the estimates of sensitivity at or below day five are low with large credible intervals.
 
 ```{r npv-figure}
-for_fig <- ggplot(data=plot_dat, aes(x=days_since_exposure)) +
+for_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
     geom_errorbar(aes(ymax=for_lb, ymin=for_ub), color="gray30") +
     geom_point(aes(y=for_med)) +
@@ -167,19 +152,19 @@ for_fig <- ggplot(data=plot_dat, aes(x=days_since_exposure)) +
 
 gridExtra::grid.arrange(fnr_fig, for_fig)
 
-ggplot(plot_dat, aes(x=days_since_exposure)) +
-    geom_hline(aes(yintercept=1), linetype="dashed") +
-    geom_errorbar(aes(ymax=1-rr_lb, ymin=1-rr_ub), color="gray30") +
-    geom_point(aes(y=1-rr_med)) +
-    scale_x_continuous("Days since exposure",
-                       breaks=seq(0, 21, 7),
-                       limits=c(0,21.5)) +
-    scale_y_log10("Relative risk of having a negative RT-PCR test",
-                  breaks=2^c(-3:1),
-                  labels=c("1/8", "1/4", "1/2", "1", "2")) +
-    coord_cartesian(ylim=c(2^-3, 2^1)) +
-    theme_bw() +
-    theme(axis.text=element_text(color="black"))
+# ggplot(plot_dat, aes(x=days_since_exposure)) +
+#     geom_hline(aes(yintercept=1), linetype="dashed") +
+#     geom_errorbar(aes(ymax=1-rr_lb, ymin=1-rr_ub), color="gray30") +
+#     geom_point(aes(y=1-rr_med)) +
+#     scale_x_continuous("Days since exposure",
+#                        breaks=seq(0, 21, 7),
+#                        limits=c(0,21.5)) +
+#     scale_y_log10("Relative risk of having a negative RT-PCR test",
+#                   breaks=2^c(-3:1),
+#                   labels=c("1/8", "1/4", "1/2", "1", "2")) +
+#     coord_cartesian(ylim=c(2^-3, 2^1)) +
+#     theme_bw() +
+#     theme(axis.text=element_text(color="black"))
 ```
 
 
@@ -187,295 +172,196 @@ Due to the decline in sensitivity over time, the RT-PCR test is best deployed ab
 A day or two after exposure (3 or 4 days prior to symptoms), the test may have no utility at all, and thus the probability of having been infected is would be the same with or without an RT-PCR, in our case about 11%.
 Seven to nine days after exposure (roughly 2 to 4 days after symptom onset), the negative predictive value is around 95%, meaning there is about a 5% chance of actually being covid-19 positive despite testing negative.
 
-### Sensitivity analyses
+\pagebreak
 
-#### Specificity not 100%
+```{r npv-antibodies, cache=T, eval=T, include=F}
+## fit a model to find the overall seroincidence across all observations
+npv_antibodies_model <- stan_model("Stan/npv-antibodies.stan")
 
-```{r sens-analysis-spec, cache=T, eval=T}
-spec_est <- sampling(npv_onset_model,
-                     data=list(N=nrow(test_dat),
-                               J=max(test_dat$study_idx),
-                               T_max=T_max,
-                               test_n=test_dat$n,
-                               test_pos=test_dat$test_pos,
-                               study_idx=test_dat$study_idx,
-                               t_symp_test=test_dat$day,
-                               exposed_n=686,
-                               exposed_pos=77,
-                               t_exp_symp=5,
-                               spec=0.9
-                     ),
-                     iter=n_iter,
-                     warmup=n_warmup,
-                     control=list(adapt_delta=p_adapt_delta,
-                                  max_treedepth=n_max_treedepth),
-                     save_warmup=F)
+igg_analysis <- make_analysis_data(stan_model=npv_antibodies_model,
+                                   data_list=list(N=nrow(igg_dat),
+                                                  J=max(igg_dat$study_idx),
+                                                  T_max=T_max,
+                                                  test_n=igg_dat$n,
+                                                  test_pos=igg_dat$test_pos,
+                                                  study_idx=igg_dat$study_idx,
+                                                  t_symp_test=igg_dat$day,
+                                                  exposed_n=686,
+                                                  exposed_pos=77,
+                                                  t_exp_symp=5,
+                                                  spec=1),
+                                   iter=n_iter,
+                                   warmup=n_warmup,
+                                   control=list(adapt_delta=p_adapt_delta,
+                                                max_treedepth=n_max_treedepth),
+                                   save_warmup=F)
+
+
+igm_analysis <- make_analysis_data(stan_model=npv_antibodies_model,
+                                   data_list=list(N=nrow(igm_dat),
+                                                  J=max(igm_dat$study_idx),
+                                                  T_max=T_max,
+                                                  test_n=igm_dat$n,
+                                                  test_pos=igm_dat$test_pos,
+                                                  study_idx=igm_dat$study_idx,
+                                                  t_symp_test=igm_dat$day,
+                                                  exposed_n=686,
+                                                  exposed_pos=77,
+                                                  t_exp_symp=5,
+                                                  spec=1),
+                                   iter=n_iter,
+                                   warmup=n_warmup,
+                                   control=list(adapt_delta=p_adapt_delta,
+                                                max_treedepth=n_max_treedepth),
+                                   save_warmup=F)
 ```
 
-```{r all-conditionals-spec}
-# loo::extract_log_lik(npv_est) %>% loo::loo()
-## sensitivity (sens) of PCR: P(PCR+ | covid+)
-## false negative rate (fnr) of PCR: P(PCR- | covid+) = 1 - sens
-sens_spec <- extract(spec_est, pars="sens")[[1]]
-fnr_spec <- 1-sens_spec
-
-## negative predictive value (npv) of PCR: P(covid- | PCR-)
-## false omission rate (FOR) of PCR: P(covid+ | PCR-) = 1 - npv
-npv_spec <- extract(spec_est, pars="npv")[[1]]
-for_spec <- 1-npv_spec
-
-## attack rate: P(covid+)
-## P(covid-) = 1 - attack_rate
-ar_spec <- extract(spec_est, pars="attack_rate")[[1]] %>% as.vector()
-```
-
-```{r plot-dat-spec}
-plot_dat_spec <- as_tibble(sens_spec) %>%
-    gather("days", "sens") %>%
-    mutate(days_since_exposure=gsub(pattern="V", "", days) %>% as.numeric) %>%
-    bind_cols(as_tibble(npv_spec) %>%
-                  gather("days", "npv") %>%
-                  mutate(ar=rep(ar_spec, T_max)) %>% 
-                  select(-days)) %>% 
-    group_by(days_since_exposure) %>%
-    summarise(fnr_med=median(1-sens),
-              fnr_lb=quantile(1-sens,probs=.025),
-              fnr_ub=quantile(1-sens,probs=.975),
-              for_med=median(1-npv),
-              for_lb=quantile(1-npv,probs=.025),
-              for_ub=quantile(1-npv,probs=.975),
-              rr_med=median(1-(1-npv)/ar),
-              rr_lb=quantile(1-(1-npv)/ar,probs=.025),
-              rr_ub=quantile(1-(1-npv)/ar,probs=.975),
-              abs_med=median(ar-(1-npv)),
-              abs_lb=quantile(ar-(1-npv),probs=.025),
-              abs_ub=quantile(ar-(1-npv),probs=.975)) %>% 
-    mutate(spec=0.9) %>% 
-    bind_rows(plot_dat %>% mutate(spec=1))
-
-# paste0("Median (95% CI) of attack rate: ", median(100*ar_spec) %>% round(), "% (",
-#        quantile(100*ar_spec, probs=.025) %>% round(), ", ",
-#        quantile(100*ar_spec, probs=.975) %>% round(), "%)")
-# knitr::kable(plot_dat_spec %>%
-#                  rename(Days=days_since_exposure) %>% 
-#                  mutate_at(vars(2:ncol(plot_dat_spec)), function(x) paste0(round(100*x), "%")),
-#              digits=0)
-```
-
-```{r fnr-figure-spec}
-ggplot(data=plot_dat_spec, aes(x=days_since_exposure, color=as.factor(spec))) +
+```{r antibody-fig, eval=F}
+bind_rows(igg_analysis$plot_dat %>% mutate(test="IgG"),
+          igm_analysis$plot_dat %>% mutate(test="IgM"),
+          main_analysis$plot_dat %>% mutate(test="RT-PCR")) %>% 
+    ggplot(aes(x=days_since_exposure, color=test)) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
-    geom_errorbar(aes(ymin=fnr_lb, ymax=fnr_ub)) +
-    geom_point(aes(y=fnr_med)) +
-    scale_x_continuous("",
+    # geom_errorbar(aes(ymax=for_lb, ymin=for_ub), color="gray30") +
+    geom_point(aes(y=for_med)) +
+    scale_x_continuous("Days since exposure",
                        breaks=seq(0, 21, 7),
                        limits=c(0,21.5)) +
-    scale_y_continuous("Probability RT-PCR negative,\ngiven covid-19 positive",
-                       limits=c(0,1)) +
+    scale_y_continuous("Probability infected,\ngiven RT-PCR negative",
+                       limits=c(0, 0.15),
+                       breaks=seq(0,0.15, 0.05)) +
+    scale_color_manual("Test",
+                       values=cbbPalette[c(2,3,1)]) +
     theme_bw() +
-    theme(axis.text.y=element_text(color="black"),
-          axis.title.x=element_blank(),
-          axis.text.x=element_blank(),
-          axis.ticks=element_blank())
+    theme(axis.text=element_text(color="black"))
+```
+<!-- \pagebreak -->
+
+## Sensitivity analyses
+
+### Specificity
+
+What if the specificity of the test is less than 100%?
+To test this we fit the same model except with a specificity of 90% and compared the results to the original (the sensitivity remained the same).
+
+```{r sens-analysis-spec, cache=T, eval=T}
+spec_est <- make_analysis_data(stan_model=npv_onset_model,
+                                    data_list=list(N=nrow(pcr_dat),
+                                                   J=max(pcr_dat$study_idx),
+                                                   T_max=T_max,
+                                                   test_n=pcr_dat$n,
+                                                   test_pos=pcr_dat$test_pos,
+                                                   study_idx=pcr_dat$study_idx,
+                                                   t_symp_test=pcr_dat$day,
+                                                   exposed_n=686,
+                                                   exposed_pos=77,
+                                                   t_exp_symp=5,
+                                                   spec=0.9),
+                                    iter=n_iter,
+                                    warmup=n_warmup,
+                                    control=list(adapt_delta=p_adapt_delta,
+                                                 max_treedepth=n_max_treedepth),
+                                    save_warmup=F)
 ```
 
-With no data on RT-PCR to time prior to symptom onset, the estimates of sensitivity at or below day five are low with large credible intervals.
-
-```{r npv-figure-spec}
-ggplot(data=plot_dat_spec,
-       aes(x=days_since_exposure, color=as.factor(spec))) +
+```{r plot-spec}
+spec_est$plot_dat %>% 
+    mutate(spec="90%") %>% 
+    bind_rows(main_analysis$plot_dat %>% mutate(spec="100%")) %>% 
+    ggplot(aes(x=days_since_exposure, color=spec, fill=spec)) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
-    geom_errorbar(aes(ymax=for_lb, ymin=for_ub), alpha=0.5) +
-    geom_point(aes(y=for_med)) +
+    geom_ribbon(aes(ymax=for_lb, ymin=for_ub), alpha=0.5) +
+    # geom_errorbar(aes(ymax=for_lb, ymin=for_ub), alpha=0.5) +
+    geom_line(aes(y=for_med)) +
+    # geom_point(aes(y=for_med)) +
     scale_x_continuous("Days since exposure",
                        breaks=seq(0, 21, 7),
                        limits=c(0,21.5)) +
     scale_y_continuous("Probability infected,\ngiven RT-PCR negative",
                        limits=c(0, 0.16),
                        breaks=seq(0,0.15, 0.05)) +
-    scale_color_discrete("Specificity",
-                         labels=c("90%", "100%")) +
-    theme_bw() +
-    theme(axis.text=element_text(color="black"))
-
-gridExtra::grid.arrange(fnr_fig_spec, for_fig_spec)
-
-ggplot(plot_dat_spec, aes(x=days_since_exposure)) +
-    geom_hline(aes(yintercept=1), linetype="dashed") +
-    geom_errorbar(aes(ymax=1-rr_lb, ymin=1-rr_ub), color="gray30") +
-    geom_point(aes(y=1-rr_med)) +
-    scale_x_continuous("Days since exposure",
-                       breaks=seq(0, 21, 7),
-                       limits=c(0,21.5)) +
-    scale_y_log10("Relative risk of having a negative RT-PCR test",
-                  breaks=2^c(-3:1),
-                  labels=c("1/8", "1/4", "1/2", "1", "2")) +
-    coord_cartesian(ylim=c(2^-3, 2^1)) +
+    scale_color_manual("Specificity",
+                       values=cbbPalette) +
+    scale_fill_manual("Specificity",
+                      values=cbbPalette) +
     theme_bw() +
     theme(axis.text=element_text(color="black"))
 ```
 
-#### Different attack rates
+The shape of the curve for 90% specificity is similar to that of 100%, though slightly elevated.
+The best time to test is still 2-4 days post-symptom onset.
 
+\pagebreak
 
-```{r half-ar, cache=T, eval=T}
-half_est <- sampling(npv_onset_model,
-                     data=list(N=nrow(test_dat),
-                               J=max(test_dat$study_idx),
-                               T_max=T_max,
-                               test_n=test_dat$n,
-                               test_pos=test_dat$test_pos,
-                               study_idx=test_dat$study_idx,
-                               t_symp_test=test_dat$day,
-                               exposed_n=686,
-                               exposed_pos=round(77/2),
-                               t_exp_symp=5,
-                               spec=1
-                     ),
-                     iter=n_iter,
-                     warmup=n_warmup,
-                     control=list(adapt_delta=p_adapt_delta,
-                                  max_treedepth=n_max_treedepth),
-                     save_warmup=F)
+### Different attack rates
+
+We tested attack rates of half, twice, and four times that of Bi et al. (2020).
+
+```{r ar-est, cache=T, eval=T}
+half_est <- make_analysis_data(stan_model=npv_onset_model,
+                                    data_list=list(N=nrow(pcr_dat),
+                                                   J=max(pcr_dat$study_idx),
+                                                   T_max=T_max,
+                                                   test_n=pcr_dat$n,
+                                                   test_pos=pcr_dat$test_pos,
+                                                   study_idx=pcr_dat$study_idx,
+                                                   t_symp_test=pcr_dat$day,
+                                                   exposed_n=686,
+                                                   exposed_pos=round(77/2),
+                                                   t_exp_symp=5,
+                                                   spec=1),
+                                    iter=n_iter,
+                                    warmup=n_warmup,
+                                    control=list(adapt_delta=p_adapt_delta,
+                                                 max_treedepth=n_max_treedepth),
+                                    save_warmup=F)
+
+two_est <- make_analysis_data(stan_model=npv_onset_model,
+                              data_list=list(N=nrow(pcr_dat),
+                                             J=max(pcr_dat$study_idx),
+                                             T_max=T_max,
+                                             test_n=pcr_dat$n,
+                                             test_pos=pcr_dat$test_pos,
+                                             study_idx=pcr_dat$study_idx,
+                                             t_symp_test=pcr_dat$day,
+                                             exposed_n=686,
+                                             exposed_pos=2*77,
+                                             t_exp_symp=5,
+                                             spec=1),
+                              iter=n_iter,
+                              warmup=n_warmup,
+                              control=list(adapt_delta=p_adapt_delta,
+                                           max_treedepth=n_max_treedepth),
+                              save_warmup=F)
+
+four_est <- make_analysis_data(stan_model=npv_onset_model,
+                               data_list=list(N=nrow(pcr_dat),
+                                              J=max(pcr_dat$study_idx),
+                                              T_max=T_max,
+                                              test_n=pcr_dat$n,
+                                              test_pos=pcr_dat$test_pos,
+                                              study_idx=pcr_dat$study_idx,
+                                              t_symp_test=pcr_dat$day,
+                                              exposed_n=686,
+                                              exposed_pos=4*77,
+                                              t_exp_symp=5,
+                                              spec=1),
+                               iter=n_iter,
+                               warmup=n_warmup,
+                               control=list(adapt_delta=p_adapt_delta,
+                                            max_treedepth=n_max_treedepth),
+                               save_warmup=F)
 ```
 
-```{r 2ar, cache=T, eval=T}
-two_est <- sampling(npv_onset_model,
-                    data=list(N=nrow(test_dat),
-                              J=max(test_dat$study_idx),
-                              T_max=T_max,
-                              test_n=test_dat$n,
-                              test_pos=test_dat$test_pos,
-                              study_idx=test_dat$study_idx,
-                              t_symp_test=test_dat$day,
-                              exposed_n=686,
-                              exposed_pos=77*2,
-                              t_exp_symp=5,
-                              spec=1
-                    ),
-                    iter=n_iter,
-                    warmup=n_warmup,
-                    control=list(adapt_delta=p_adapt_delta,
-                                 max_treedepth=n_max_treedepth),
-                    save_warmup=F)
-```
-
-```{r 4ar, cache=T, eval=T}
-four_est <- sampling(npv_onset_model,
-                     data=list(N=nrow(test_dat),
-                               J=max(test_dat$study_idx),
-                               T_max=T_max,
-                               test_n=test_dat$n,
-                               test_pos=test_dat$test_pos,
-                               study_idx=test_dat$study_idx,
-                               t_symp_test=test_dat$day,
-                               exposed_n=686,
-                               exposed_pos=77*4,
-                               t_exp_symp=5,
-                               spec=1
-                     ),
-                     iter=n_iter,
-                     warmup=n_warmup,
-                     control=list(adapt_delta=p_adapt_delta,
-                                  max_treedepth=n_max_treedepth),
-                     save_warmup=F)
-```
-
-```{r comp-conditionals}
-# loo::extract_log_lik(npv_est) %>% loo::loo()
-## sensitivity (sens) of PCR: P(PCR+ | covid+)
-## false negative rate (fnr) of PCR: P(PCR- | covid+) = 1 - sens
-sens_half <- extract(half_est, pars="sens")[[1]]
-sens_2x <- extract(two_est, pars="sens")[[1]]
-sens_4x <- extract(four_est, pars="sens")[[1]]
-
-## negative predictive value (npv) of PCR: P(covid- | PCR-)
-## false omission rate (FOR) of PCR: P(covid+ | PCR-) = 1 - npv
-npv_half <- extract(half_est, pars="npv")[[1]]
-npv_2x <- extract(two_est, pars="npv")[[1]]
-npv_4x <- extract(four_est, pars="npv")[[1]]
-
-## attack rate: P(covid+)
-## P(covid-) = 1 - attack_rate
-ar_half <- extract(half_est, pars="attack_rate")[[1]] %>% as.vector()
-ar_2x <- extract(two_est, pars="attack_rate")[[1]] %>% as.vector()
-ar_4x <- extract(four_est, pars="attack_rate")[[1]] %>% as.vector()
-```
-
-```{r ar-comp}
-plot_ar <- bind_rows(as_tibble(sens_half) %>%
-                         gather("days", "sens") %>%
-                         mutate(days_since_exposure=gsub(pattern="V", "", days) %>%
-                                    as.numeric) %>%
-                         bind_cols(as_tibble(npv_half) %>%
-                                       gather("days", "npv") %>%
-                                       mutate(ar=rep(ar_half, T_max)) %>% 
-                                       select(-days)) %>% 
-                         group_by(days_since_exposure) %>%
-                         summarise(fnr_med=median(1-sens),
-                                   fnr_lb=quantile(1-sens,probs=.025),
-                                   fnr_ub=quantile(1-sens,probs=.975),
-                                   for_med=median(1-npv),
-                                   for_lb=quantile(1-npv,probs=.025),
-                                   for_ub=quantile(1-npv,probs=.975),
-                                   rr_med=median(1-(1-npv)/ar),
-                                   rr_lb=quantile(1-(1-npv)/ar,probs=.025),
-                                   rr_ub=quantile(1-(1-npv)/ar,probs=.975),
-                                   abs_med=median(ar-(1-npv)),
-                                   abs_lb=quantile(ar-(1-npv),probs=.025),
-                                   abs_ub=quantile(ar-(1-npv),probs=.975)) %>% 
-                         mutate(ar_idx="half"),
-                     as_tibble(sens_2x) %>%
-                         gather("days", "sens") %>%
-                         mutate(days_since_exposure=gsub(pattern="V", "", days) %>%
-                                    as.numeric) %>%
-                         bind_cols(as_tibble(npv_2x) %>%
-                                       gather("days", "npv") %>%
-                                       mutate(ar=rep(ar_2x, T_max)) %>% 
-                                       select(-days)) %>% 
-                         group_by(days_since_exposure) %>%
-                         summarise(fnr_med=median(1-sens),
-                                   fnr_lb=quantile(1-sens,probs=.025),
-                                   fnr_ub=quantile(1-sens,probs=.975),
-                                   for_med=median(1-npv),
-                                   for_lb=quantile(1-npv,probs=.025),
-                                   for_ub=quantile(1-npv,probs=.975),
-                                   rr_med=median(1-(1-npv)/ar),
-                                   rr_lb=quantile(1-(1-npv)/ar,probs=.025),
-                                   rr_ub=quantile(1-(1-npv)/ar,probs=.975),
-                                   abs_med=median(ar-(1-npv)),
-                                   abs_lb=quantile(ar-(1-npv),probs=.025),
-                                   abs_ub=quantile(ar-(1-npv),probs=.975)) %>% 
-                         mutate(ar_idx="2x"),
-                     as_tibble(sens_4x) %>%
-                         gather("days", "sens") %>%
-                         mutate(days_since_exposure=gsub(pattern="V", "", days) %>%
-                                    as.numeric) %>%
-                         bind_cols(as_tibble(npv_4x) %>%
-                                       gather("days", "npv") %>%
-                                       mutate(ar=rep(ar_half, T_max)) %>% 
-                                       select(-days)) %>% 
-                         group_by(days_since_exposure) %>%
-                         summarise(fnr_med=median(1-sens),
-                                   fnr_lb=quantile(1-sens,probs=.025),
-                                   fnr_ub=quantile(1-sens,probs=.975),
-                                   for_med=median(1-npv),
-                                   for_lb=quantile(1-npv,probs=.025),
-                                   for_ub=quantile(1-npv,probs=.975),
-                                   rr_med=median(1-(1-npv)/ar),
-                                   rr_lb=quantile(1-(1-npv)/ar,probs=.025),
-                                   rr_ub=quantile(1-(1-npv)/ar,probs=.975),
-                                   abs_med=median(ar-(1-npv)),
-                                   abs_lb=quantile(ar-(1-npv),probs=.025),
-                                   abs_ub=quantile(ar-(1-npv),probs=.975)) %>% 
-                         mutate(ar_idx="4x"),
-                     plot_dat %>% mutate(ar_idx="Bi"))
-
-ggplot(data=plot_ar,
-       aes(x=days_since_exposure, fill=as.factor(ar_idx),
-           color=as.factor(ar_idx))) +
+```{r plot-ar}
+bind_rows(half_est$plot_dat %>% mutate(ar_idx="half"),
+          two_est$plot_dat %>% mutate(ar_idx="2x"),
+          four_est$plot_dat %>% mutate(ar_idx="4x"),
+          main_analysis$plot_dat %>% mutate(ar_idx="Bi")) %>% 
+    ggplot(aes(x=days_since_exposure, fill=as.factor(ar_idx),
+               color=as.factor(ar_idx))) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
-    geom_ribbon(aes(ymin=for_lb, ymax=for_ub), alpha=0.3) +
+    # geom_ribbon(aes(ymin=for_lb, ymax=for_ub), alpha=0.3) +
     geom_line(aes(y=for_med)) +
     scale_x_continuous("",
                        breaks=seq(0, 21, 7),
@@ -493,130 +379,171 @@ ggplot(data=plot_ar,
     theme(axis.text=element_text(color="black"))
 ```
 
-#### Different incubation period lengths
+As the attack rate increases, the shape looks more like the false negative rate seen above in Figure 2.
+As the attack rate decreases, the probabilities approach 0 and thus the entire curve flattens out.
+Regardless, the best time to test is still 2-4 days after symptom onset.
 
-```{r 3d, cache=T, eval=T}
-three_day_est <- sampling(npv_onset_model,
-                    data=list(N=nrow(test_dat),
-                              J=max(test_dat$study_idx),
-                              T_max=T_max,
-                              test_n=test_dat$n,
-                              test_pos=test_dat$test_pos,
-                              study_idx=test_dat$study_idx,
-                              t_symp_test=test_dat$day,
-                              exposed_n=686,
-                              exposed_pos=77,
-                              t_exp_symp=3,
-                              spec=1
-                    ),
-                    iter=n_iter,
-                    warmup=n_warmup,
-                    control=list(adapt_delta=p_adapt_delta,
-                                 max_treedepth=n_max_treedepth),
-                    save_warmup=F)
+\pagebreak
+
+### Different incubation period lengths
+
+We originally assumed a 5-day incubation period, what if that was 3 or 7 days instead?
+
+```{r inc-est, cache=T, eval=T}
+three_day_est <- make_analysis_data(stan_model=npv_onset_model,
+                                    data_list=list(N=nrow(pcr_dat),
+                                                   J=max(pcr_dat$study_idx),
+                                                   T_max=T_max,
+                                                   test_n=pcr_dat$n,
+                                                   test_pos=pcr_dat$test_pos,
+                                                   study_idx=pcr_dat$study_idx,
+                                                   t_symp_test=pcr_dat$day,
+                                                   exposed_n=686,
+                                                   exposed_pos=77,
+                                                   t_exp_symp=3,
+                                                   spec=1),
+                                    iter=n_iter,
+                                    warmup=n_warmup,
+                                    control=list(adapt_delta=p_adapt_delta,
+                                                 max_treedepth=n_max_treedepth),
+                                    save_warmup=F)
+
+seven_day_est <- make_analysis_data(stan_model=npv_onset_model,
+                               data_list=list(N=nrow(pcr_dat),
+                                              J=max(pcr_dat$study_idx),
+                                              T_max=T_max,
+                                              test_n=pcr_dat$n,
+                                              test_pos=pcr_dat$test_pos,
+                                              study_idx=pcr_dat$study_idx,
+                                              t_symp_test=pcr_dat$day,
+                                              exposed_n=686,
+                                              exposed_pos=77,
+                                              t_exp_symp=7,
+                                              spec=1),
+                               iter=n_iter,
+                               warmup=n_warmup,
+                               control=list(adapt_delta=p_adapt_delta,
+                                            max_treedepth=n_max_treedepth),
+                               save_warmup=F)
 ```
 
-```{r 7d, cache=T, eval=T}
-seven_day_est <- sampling(npv_onset_model,
-                     data=list(N=nrow(test_dat),
-                               J=max(test_dat$study_idx),
-                               T_max=T_max,
-                               test_n=test_dat$n,
-                               test_pos=test_dat$test_pos,
-                               study_idx=test_dat$study_idx,
-                               t_symp_test=test_dat$day,
-                               exposed_n=686,
-                               exposed_pos=77,
-                               t_exp_symp=7,
-                               spec=1
-                     ),
-                     iter=n_iter,
-                     warmup=n_warmup,
-                     control=list(adapt_delta=p_adapt_delta,
-                                  max_treedepth=n_max_treedepth),
-                     save_warmup=F)
-```
-
-```{r comp-conditionals}
-## sensitivity (sens) of PCR: P(PCR+ | covid+)
-## false negative rate (fnr) of PCR: P(PCR- | covid+) = 1 - sens
-sens_3d <- extract(three_day_est, pars="sens")[[1]]
-sens_7d <- extract(seven_day_est, pars="sens")[[1]]
-
-## negative predictive value (npv) of PCR: P(covid- | PCR-)
-## false omission rate (FOR) of PCR: P(covid+ | PCR-) = 1 - npv
-npv_3d <- extract(three_day_est, pars="npv")[[1]]
-npv_7d <- extract(seven_day_est, pars="npv")[[1]]
-
-## attack rate: P(covid+)
-## P(covid-) = 1 - attack_rate
-ar_3d <- extract(three_day_est, pars="attack_rate")[[1]] %>% as.vector()
-ar_7d <- extract(seven_day_est, pars="attack_rate")[[1]] %>% as.vector()
-```
-
-```{r ar-comp}
-plot_inc <- bind_rows(as_tibble(sens_3d) %>%
-                         gather("days", "sens") %>%
-                         mutate(days_since_exposure=gsub(pattern="V", "", days) %>%
-                                    as.numeric) %>%
-                         bind_cols(as_tibble(npv_3d) %>%
-                                       gather("days", "npv") %>%
-                                       mutate(ar=rep(ar_3d, T_max)) %>% 
-                                       select(-days)) %>% 
-                         group_by(days_since_exposure) %>%
-                         summarise(fnr_med=median(1-sens),
-                                   fnr_lb=quantile(1-sens,probs=.025),
-                                   fnr_ub=quantile(1-sens,probs=.975),
-                                   for_med=median(1-npv),
-                                   for_lb=quantile(1-npv,probs=.025),
-                                   for_ub=quantile(1-npv,probs=.975),
-                                   rr_med=median(1-(1-npv)/ar),
-                                   rr_lb=quantile(1-(1-npv)/ar,probs=.025),
-                                   rr_ub=quantile(1-(1-npv)/ar,probs=.975),
-                                   abs_med=median(ar-(1-npv)),
-                                   abs_lb=quantile(ar-(1-npv),probs=.025),
-                                   abs_ub=quantile(ar-(1-npv),probs=.975)) %>% 
-                         mutate(inc_period="3d"),
-                     as_tibble(sens_7d) %>%
-                         gather("days", "sens") %>%
-                         mutate(days_since_exposure=gsub(pattern="V", "", days) %>%
-                                    as.numeric) %>%
-                         bind_cols(as_tibble(npv_7d) %>%
-                                       gather("days", "npv") %>%
-                                       mutate(ar=rep(ar_7d, T_max)) %>% 
-                                       select(-days)) %>% 
-                         group_by(days_since_exposure) %>%
-                         summarise(fnr_med=median(1-sens),
-                                   fnr_lb=quantile(1-sens,probs=.025),
-                                   fnr_ub=quantile(1-sens,probs=.975),
-                                   for_med=median(1-npv),
-                                   for_lb=quantile(1-npv,probs=.025),
-                                   for_ub=quantile(1-npv,probs=.975),
-                                   rr_med=median(1-(1-npv)/ar),
-                                   rr_lb=quantile(1-(1-npv)/ar,probs=.025),
-                                   rr_ub=quantile(1-(1-npv)/ar,probs=.975),
-                                   abs_med=median(ar-(1-npv)),
-                                   abs_lb=quantile(ar-(1-npv),probs=.025),
-                                   abs_ub=quantile(ar-(1-npv),probs=.975)) %>% 
-                         mutate(inc_period="7d"),
-                     plot_dat %>% mutate(inc_period="5d"))
-
-ggplot(data=plot_inc,
-       aes(x=days_since_exposure, fill=as.factor(inc_period),
-           color=as.factor(inc_period))) +
+```{r plot-inc}
+bind_rows(three_day_est$plot_dat %>% mutate(inc_period="3d"),
+          seven_day_est$plot_dat %>% mutate(inc_period="7d"),
+          main_analysis$plot_dat %>% mutate(inc_period="5d")) %>% 
+    ggplot(aes(x=days_since_exposure, fill=as.factor(inc_period),
+               color=as.factor(inc_period))) +
     geom_vline(aes(xintercept=3), linetype="dashed", color=cbbPalette[2]) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
     geom_vline(aes(xintercept=7), linetype="dashed", color=cbbPalette[3]) +
-    geom_ribbon(aes(ymin=for_lb, ymax=for_ub), alpha=0.2) +
+    # geom_ribbon(aes(ymin=for_lb, ymax=for_ub), alpha=0.1) +
     geom_line(aes(y=for_med)) +
     scale_x_continuous("",
                        breaks=seq(0, 21, 7),
                        limits=c(0,21.5)) +
-    scale_y_continuous("Probability infected,\ngiven RT-PCR negative") +
+    scale_y_continuous("Probability infected,\ngiven RT-PCR negative",
+                       limits=c(0,0.15)) +
     scale_color_manual("Incubation period",
                        values=cbbPalette[c(2,1,3)]) +
     scale_fill_manual("Incubation period",
-                       values=cbbPalette[c(2,1,3)]) +
+                      values=cbbPalette[c(2,1,3)]) +
     theme_bw() +
     theme(axis.text=element_text(color="black"))
 ```
+
+Changing the length of the incubation period changes the progression of the false omission rate (probability infected given test negative).
+Since the sensitivity is calibrated with respect to the time of symptom onset, an earlier onset time leads to a quicker drop in false omission rate and a later onset time leads to a slower drop.
+
+<!-- \pagebreak -->
+
+<!-- ### Incubation period as a random variable -->
+
+<!-- Since we don't know the exact incubation period time, what if we used a random variable for the incubation period based on [Lauer, Grantz, et al. (2020)](https://annals.org/aim/fullarticle/2762808/incubation-period-coronavirus-disease-2019-covid-19-from-publicly-reported)? -->
+
+<!-- ```{r npv-rv, cache=T, eval=T, include=FALSE} -->
+<!-- ## fit a model to find the negative predictive value using a random variable -->
+<!-- ## for the incubation period -->
+<!-- npv_rv_model <- stan_model("Stan/npv-analysis.stan") -->
+
+<!-- npv_rv_est <- sampling(npv_rv_model, -->
+<!--                        data=list(N=nrow(pcr_dat), -->
+<!--                                  J=max(pcr_dat$study_idx), -->
+<!--                                  T_max=T_max, -->
+<!--                                  test_n=pcr_dat$n, -->
+<!--                                  test_pos=pcr_dat$test_pos, -->
+<!--                                  study_idx=pcr_dat$study_idx, -->
+<!--                                  t_symp_test=pcr_dat$day, -->
+<!--                                  exposed_n=686, -->
+<!--                                  exposed_pos=77, -->
+<!--                                  spec=1 -->
+<!--                        ), -->
+<!--                        iter=n_iter, -->
+<!--                        warmup=n_warmup, -->
+<!--                        control=list(adapt_delta=p_adapt_delta, -->
+<!--                                     max_treedepth=n_max_treedepth), -->
+<!--                        chains=6, -->
+<!--                        save_warmup=F) -->
+<!-- ``` -->
+
+<!-- ```{r rv-conditionals} -->
+<!-- # loo::extract_log_lik(npv_est) %>% loo::loo() -->
+<!-- ## sensitivity (sens) of PCR: P(PCR+ | covid+) -->
+<!-- ## false negative rate (fnr) of PCR: P(PCR- | covid+) = 1 - sens -->
+<!-- sens_rv <- extract(npv_rv_est, pars="sens")[[1]] -->
+
+<!-- ## negative predictive value (npv) of PCR: P(covid- | PCR-) -->
+<!-- ## false omission rate (FOR) of PCR: P(covid+ | PCR-) = 1 - npv -->
+<!-- npv_rv <- extract(npv_rv_est, pars="npv")[[1]] -->
+
+<!-- ## attack rate: P(covid+) -->
+<!-- ## P(covid-) = 1 - attack_rate -->
+<!-- ar_rv <- extract(npv_rv_est, pars="attack_rate")[[1]] %>% as.vector() -->
+<!-- ``` -->
+
+<!-- ```{r plot-rv} -->
+<!-- bind_rows(as_tibble(sens_rv) %>% -->
+<!--               gather("days", "sens") %>% -->
+<!--               mutate(days_since_exposure=gsub(pattern="V", "", days) %>% -->
+<!--                          as.numeric) %>% -->
+<!--               bind_cols(as_tibble(npv_rv) %>% -->
+<!--                             gather("days", "npv") %>% -->
+<!--                             mutate(ar=rep(ar_rv, T_max)) %>% -->
+<!--                             select(-days)) %>% -->
+<!--               group_by(days_since_exposure) %>% -->
+<!--               summarise(fnr_med=median(1-sens), -->
+<!--                         fnr_lb=quantile(1-sens,probs=.025), -->
+<!--                         fnr_ub=quantile(1-sens,probs=.975), -->
+<!--                         for_med=median(1-npv), -->
+<!--                         for_lb=quantile(1-npv,probs=.025), -->
+<!--                         for_ub=quantile(1-npv,probs=.975), -->
+<!--                         rr_med=median(1-(1-npv)/ar), -->
+<!--                         rr_lb=quantile(1-(1-npv)/ar,probs=.025), -->
+<!--                         rr_ub=quantile(1-(1-npv)/ar,probs=.975), -->
+<!--                         abs_med=median(ar-(1-npv)), -->
+<!--                         abs_lb=quantile(ar-(1-npv),probs=.025), -->
+<!--                         abs_ub=quantile(ar-(1-npv),probs=.975)) %>%  -->
+<!--               mutate(type="rv"), -->
+<!--           plot_dat %>% mutate(type="fixed")) %>%  -->
+<!--     ggplot(aes(x=days_since_exposure, color=type, fill=type)) + -->
+<!--     geom_vline(aes(xintercept=5), linetype="dashed") + -->
+<!--     geom_ribbon(aes(ymax=for_lb, ymin=for_ub), alpha=0.4) + -->
+<!--     # geom_errorbar(aes(ymax=for_lb, ymin=for_ub), color="gray30") + -->
+<!--     geom_line(aes(y=for_med)) + -->
+<!--     # geom_point(aes(y=for_med)) + -->
+<!--     scale_x_continuous("Days since exposure", -->
+<!--                        breaks=seq(0, 21, 7), -->
+<!--                        limits=c(0,21.5)) + -->
+<!--     scale_y_continuous("Probability infected,\ngiven RT-PCR negative", -->
+<!--                        limits=c(0, 0.15), -->
+<!--                        breaks=seq(0,0.15, 0.05)) + -->
+<!--     scale_color_manual("Type", -->
+<!--                        labels=c("Fixed onset", "Random variable"), -->
+<!--                        values=cbbPalette) + -->
+<!--     scale_fill_manual("Type", -->
+<!--                       labels=c("Fixed onset", "Random variable"), -->
+<!--                       values=cbbPalette) + -->
+<!--     theme_bw() + -->
+<!--     theme(axis.text=element_text(color="black")) -->
+<!-- ``` -->
+
+<!-- Treating the incubation period as a random variable adds uncertainty to the first week after exposure. -->
