@@ -41,6 +41,7 @@ transformed data {
     real t_sd;
     real t_ort[N];
     real t_new[T_max];
+    real t_new_ort[T_max];
 
     for(i in 1:T_max)
         t_new[i] = log(i);
@@ -52,17 +53,21 @@ transformed data {
         t[i] = t_symp_test[i]+t_exp_symp;
         t_ort[i] = (log(t[i])-t_mean)/t_sd;
     }
+
+    for(i in 1:(T_max)){
+        t_new_ort[i] = (log(i)-t_mean)/t_sd;
+    }
 }
 
 // the beta terms are the coefficients for the cubic polynomial for log-time.
 // 'attack_rate' is the probability of infection given exposure.
 parameters{
     real beta_0;
-    real<lower=0> sigma;
-    real beta_j[J];
     real beta_1;
-    real beta_2;
-    real beta_3;
+    real<upper=0> beta_2;
+    real<lower=0> beta_3;
+    real<lower=0> sigma;
+    vector[J] eta;
     real<lower=0, upper=1> attack_rate;
 }
 
@@ -71,10 +76,13 @@ parameters{
 transformed parameters{
     real<lower=0> db_dt[t_exp_symp-2];
     vector[N] mu;
+    vector[J] beta_j;
 
     for(i in 1:(t_exp_symp-2)){
-        db_dt[i] = beta_1+2*beta_2*(log(i+1)-t_mean)/t_sd+3*beta_3*((log(i+1)-t_mean)/t_sd)^2;
+        db_dt[i] = beta_1+2*beta_2*(log(i)-t_mean)/t_sd+3*beta_3*((log(i)-t_mean)/t_sd)^2;
     }
+
+    beta_j = beta_0 + sigma*eta;
 
     for(i in 1:N){
         mu[i] = beta_j[study_idx[i]]+beta_1*t_ort[i]+beta_2*t_ort[i]^2+beta_3*t_ort[i]^3;
@@ -84,9 +92,11 @@ transformed parameters{
 model {
     target += binomial_lpmf(exposed_pos | exposed_n, attack_rate);
     target += binomial_logit_lpmf(test_pos | test_n, mu);
-    target += normal_lpdf(beta_j | beta_0, sigma);
-    target += normal_lpdf(beta_0 | 0, 1);
-    // beta_j ~ normal(beta_0, sigma);
+    // target += normal_lpdf(beta_j | beta_0, sigma);
+    target += normal_lpdf(eta | 0, 1);
+    // target += normal_lpdf(beta_0 | 0, 1);
+    // target += student_t_lpdf(sigma | 3, 0, 10)
+    // - 1 * student_t_lccdf(0 | 3, 0, 10);
 }
 
 // 'sens' is the sensitivity of the RT-PCR over time for the predicted values.
@@ -98,11 +108,7 @@ generated quantities{
     vector<lower=0, upper=1>[T_max] sens;
     vector<lower=0, upper=1>[T_max] npv;
     vector[N] log_lik;
-    real t_new_ort[T_max];
 
-    for(i in 1:(T_max)){
-        t_new_ort[i] = (log(i)-t_mean)/t_sd;
-    }
     for(i in 1:T_max){
         sens[i] = inv_logit(beta_0+beta_1*t_new_ort[i]+beta_2*t_new_ort[i]^2+beta_3*t_new_ort[i]^3);
     }

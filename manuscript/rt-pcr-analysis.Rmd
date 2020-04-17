@@ -29,31 +29,13 @@ pcr_dat <- read_csv("data/antibody-test-data.csv") %>%
     mutate(study_idx=paste(study, test, sep="_") %>% as.factor()
            %>% as.numeric(),
            pct_pos=test_pos/n)
-
-elisa_dat <- read_csv("data/antibody-test-data.csv") %>% 
-    filter(!grepl("RT_PCR", test), n > 0) %>% 
-    mutate(study_idx=paste(study, test, sep="_") %>% as.factor()
-           %>% as.numeric(),
-           pct_pos=test_pos/n)
-
-igg_dat <- read_csv("data/antibody-test-data.csv") %>% 
-    filter(test=="IgG", n > 0) %>% 
-    mutate(study_idx=paste(study, test, sep="_") %>% as.factor()
-           %>% as.numeric(),
-           pct_pos=test_pos/n)
-
-igm_dat <- read_csv("data/antibody-test-data.csv") %>% 
-    filter(test=="IgM", n > 0) %>% 
-    mutate(study_idx=paste(study, test, sep="_") %>% as.factor()
-           %>% as.numeric(),
-           pct_pos=test_pos/n)
 ```
 
 In this paper, we will try to determine the probability that someone has covid-19 given a negative RT-PCR test.
 
 ## Methods
 
-[Zhao et al. (2020)](https://academic.oup.com/cid/advance-article/doi/10.1093/cid/ciaa344/5812996), [Liu et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.06.20031856v1), [Guo et al. (2020)](https://academic.oup.com/cid/article-abstract/doi/10.1093/cid/ciaa310/5810754), and [Wölfel et al. (2020)](https://www.nature.com/articles/s41586-020-2196-x) looked at the sensitivity of the RT-PCR (and ELISAs) by time since symptom onset.
+[Zhao et al. (2020)](https://academic.oup.com/cid/advance-article/doi/10.1093/cid/ciaa344/5812996), [Liu et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.06.20031856v1), [Guo et al. (2020)](https://academic.oup.com/cid/article-abstract/doi/10.1093/cid/ciaa310/5810754), and [Wölfel et al. (2020)](https://www.nature.com/articles/s41586-020-2196-x) looked at the sensitivity of the RT-PCR by time since symptom onset.
 
 ```{r raw-figures}
 ggplot(data=pcr_dat, aes(x=day, y=pct_pos, size=n, color=study)) +
@@ -114,10 +96,11 @@ main_analysis <- make_analysis_data(stan_model=npv_onset_model,
                                     warmup=n_warmup,
                                     control=list(adapt_delta=p_adapt_delta,
                                                  max_treedepth=n_max_treedepth),
-                                    save_warmup=F)
+                                    save_warmup=F,
+                                    save_stan=T)
 ```
 
-```{r fnr-figure}
+```{r main-figure}
 fnr_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
     geom_errorbar(aes(ymin=fnr_lb, ymax=fnr_ub), color="gray30") +
@@ -132,11 +115,7 @@ fnr_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
           axis.title.x=element_blank(),
           axis.text.x=element_blank(),
           axis.ticks=element_blank())
-```
 
-With no data on RT-PCR to time prior to symptom onset, the estimates of sensitivity at or below day five are low with large credible intervals.
-
-```{r npv-figure}
 for_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
     geom_errorbar(aes(ymax=for_lb, ymin=for_ub), color="gray30") +
@@ -168,74 +147,10 @@ gridExtra::grid.arrange(fnr_fig, for_fig)
 ```
 
 
+With no data on RT-PCR to time prior to symptom onset, the estimates of sensitivity at or below day five are low with large credible intervals.
 Due to the decline in sensitivity over time, the RT-PCR test is best deployed about a week after exposure.
 A day or two after exposure (3 or 4 days prior to symptoms), the test may have no utility at all, and thus the probability of having been infected is would be the same with or without an RT-PCR, in our case about 11%.
 Seven to nine days after exposure (roughly 2 to 4 days after symptom onset), the negative predictive value is around 95%, meaning there is about a 5% chance of actually being covid-19 positive despite testing negative.
-
-\pagebreak
-
-```{r npv-antibodies, cache=T, eval=T, include=F}
-## fit a model to find the overall seroincidence across all observations
-npv_antibodies_model <- stan_model("Stan/npv-antibodies.stan")
-
-igg_analysis <- make_analysis_data(stan_model=npv_antibodies_model,
-                                   data_list=list(N=nrow(igg_dat),
-                                                  J=max(igg_dat$study_idx),
-                                                  T_max=T_max,
-                                                  test_n=igg_dat$n,
-                                                  test_pos=igg_dat$test_pos,
-                                                  study_idx=igg_dat$study_idx,
-                                                  t_symp_test=igg_dat$day,
-                                                  exposed_n=686,
-                                                  exposed_pos=77,
-                                                  t_exp_symp=5,
-                                                  spec=1),
-                                   iter=n_iter,
-                                   warmup=n_warmup,
-                                   control=list(adapt_delta=p_adapt_delta,
-                                                max_treedepth=n_max_treedepth),
-                                   save_warmup=F)
-
-
-igm_analysis <- make_analysis_data(stan_model=npv_antibodies_model,
-                                   data_list=list(N=nrow(igm_dat),
-                                                  J=max(igm_dat$study_idx),
-                                                  T_max=T_max,
-                                                  test_n=igm_dat$n,
-                                                  test_pos=igm_dat$test_pos,
-                                                  study_idx=igm_dat$study_idx,
-                                                  t_symp_test=igm_dat$day,
-                                                  exposed_n=686,
-                                                  exposed_pos=77,
-                                                  t_exp_symp=5,
-                                                  spec=1),
-                                   iter=n_iter,
-                                   warmup=n_warmup,
-                                   control=list(adapt_delta=p_adapt_delta,
-                                                max_treedepth=n_max_treedepth),
-                                   save_warmup=F)
-```
-
-```{r antibody-fig, eval=F}
-bind_rows(igg_analysis$plot_dat %>% mutate(test="IgG"),
-          igm_analysis$plot_dat %>% mutate(test="IgM"),
-          main_analysis$plot_dat %>% mutate(test="RT-PCR")) %>% 
-    ggplot(aes(x=days_since_exposure, color=test)) +
-    geom_vline(aes(xintercept=5), linetype="dashed") +
-    # geom_errorbar(aes(ymax=for_lb, ymin=for_ub), color="gray30") +
-    geom_point(aes(y=for_med)) +
-    scale_x_continuous("Days since exposure",
-                       breaks=seq(0, 21, 7),
-                       limits=c(0,21.5)) +
-    scale_y_continuous("Probability infected,\ngiven RT-PCR negative",
-                       limits=c(0, 0.15),
-                       breaks=seq(0,0.15, 0.05)) +
-    scale_color_manual("Test",
-                       values=cbbPalette[c(2,3,1)]) +
-    theme_bw() +
-    theme(axis.text=element_text(color="black"))
-```
-<!-- \pagebreak -->
 
 ## Sensitivity analyses
 

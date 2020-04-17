@@ -2,6 +2,7 @@ make_analysis_data <- function(stan_model,
                                data_list,
                                p_adapt_delta,
                                n_max_treedepth,
+                               save_stan=F,
                                ...){
     ## sample from Stan model
     stan_sample <- npv_est <- sampling(stan_model,
@@ -44,6 +45,12 @@ make_analysis_data <- function(stan_model,
                   abs_lb=quantile(ar-(1-npv),probs=.025),
                   abs_ub=quantile(ar-(1-npv),probs=.975))
 
-    return(list(plot_dat=plot_dat,
-                stan_ll=stan_ll))
+    if(save_stan){
+        return(list(plot_dat=plot_dat,
+                    stan_ll=stan_ll,
+                    stan_sample=stan_sample))
+    } else{
+        return(list(plot_dat=plot_dat,
+                    stan_ll=stan_ll))
+    }
 }
