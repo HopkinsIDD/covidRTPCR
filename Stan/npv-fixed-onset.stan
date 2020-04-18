@@ -23,40 +23,12 @@ data {
     int<lower=1> T_max;
     int<lower=1> test_n[N];
     int<lower=0> test_pos[N];
-    int t_symp_test[N];
+    matrix[N,3] t_ort;
+    matrix[T_max, 3] t_new_ort;
     int<lower=1> study_idx[N];
     int<lower=1> exposed_n;
     int<lower=0> exposed_pos;
-    int<lower=1> t_exp_symp;
     real spec;
-}
-
-// 't_new' is the log-time since exposure for the predicted times since exposure.
-// 't' is the time since exposure for each row of the input data, with a fixed
-// time from exposure to symptom onset of 5. We also find the orthogonal 't_ort'
-// and 't_new_ort' which is used to find squared and cubic terms of log-time.
-transformed data {
-    real t[N];
-    real t_mean;
-    real t_sd;
-    real t_ort[N];
-    real t_new[T_max];
-    real t_new_ort[T_max];
-
-    for(i in 1:T_max)
-        t_new[i] = log(i);
-
-    t_mean = sum(t_new)/T_max;
-    t_sd = sd(t_new);
-
-    for(i in 1:N){
-        t[i] = t_symp_test[i]+t_exp_symp;
-        t_ort[i] = (log(t[i])-t_mean)/t_sd;
-    }
-
-    for(i in 1:(T_max)){
-        t_new_ort[i] = (log(i)-t_mean)/t_sd;
-    }
 }
 
 // the beta terms are the coefficients for the cubic polynomial for log-time.
@@ -85,7 +57,7 @@ transformed parameters{
     beta_j = beta_0 + sigma*eta;
 
     for(i in 1:N){
-        mu[i] = beta_j[study_idx[i]]+beta_1*t_ort[i]+beta_2*t_ort[i]^2+beta_3*t_ort[i]^3;
+        mu[i] = beta_j[study_idx[i]]+beta_1*t_ort[i,1]+beta_2*t_ort[i,2]+beta_3*t_ort[i,3];
     }
 }
 
@@ -106,7 +78,7 @@ generated quantities{
     vector[N] log_lik;
 
     for(i in 1:T_max){
-        sens[i] = inv_logit(beta_0+beta_1*t_new_ort[i]+beta_2*t_new_ort[i]^2+beta_3*t_new_ort[i]^3);
+        sens[i] = inv_logit(beta_0+beta_1*t_new_ort[i,1]+beta_2*t_new_ort[i,2]+beta_3*t_new_ort[i,3]);
     }
 
     for(i in 1:T_max){
