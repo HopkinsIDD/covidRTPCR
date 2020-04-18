@@ -23,7 +23,7 @@ data {
     int<lower=1> T_max;
     int<lower=1> test_n[N];
     int<lower=0> test_pos[N];
-    int<lower=0> t_symp_test[N];
+    int t_symp_test[N];
     int<lower=1> study_idx[N];
     int<lower=1> exposed_n;
     int<lower=0> exposed_pos;
@@ -74,13 +74,13 @@ parameters{
 // 'db_dt' is the first derivative of the log-time polynomial, which is restricted
 // to be positive for the first 4 days since exposure.
 transformed parameters{
-    real<lower=0> db_dt[t_exp_symp-2];
+    // real<lower=0> db_dt[t_exp_symp-2];
     vector[N] mu;
     vector[J] beta_j;
 
-    for(i in 1:(t_exp_symp-2)){
-        db_dt[i] = beta_1+2*beta_2*(log(i)-t_mean)/t_sd+3*beta_3*((log(i)-t_mean)/t_sd)^2;
-    }
+    // for(i in 1:(t_exp_symp-2)){
+    //     db_dt[i] = beta_1+2*beta_2*(log(i)-t_mean)/t_sd+3*beta_3*((log(i)-t_mean)/t_sd)^2;
+    // }
 
     beta_j = beta_0 + sigma*eta;
 
@@ -92,11 +92,7 @@ transformed parameters{
 model {
     target += binomial_lpmf(exposed_pos | exposed_n, attack_rate);
     target += binomial_logit_lpmf(test_pos | test_n, mu);
-    // target += normal_lpdf(beta_j | beta_0, sigma);
     target += normal_lpdf(eta | 0, 1);
-    // target += normal_lpdf(beta_0 | 0, 1);
-    // target += student_t_lpdf(sigma | 3, 0, 10)
-    // - 1 * student_t_lccdf(0 | 3, 0, 10);
 }
 
 // 'sens' is the sensitivity of the RT-PCR over time for the predicted values.
