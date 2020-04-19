@@ -201,7 +201,7 @@ for_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
 
 gridExtra::grid.arrange(fnr_fig, for_fig)
 
-# ggplot(plot_dat, aes(x=days_since_exposure)) +
+# ggplot(main_analysis$plot_dat, aes(x=days_since_exposure)) +
 #     geom_hline(aes(yintercept=1), linetype="dashed") +
 #     geom_errorbar(aes(ymax=1-rr_lb, ymin=1-rr_ub), color="gray30") +
 #     geom_point(aes(y=1-rr_med)) +
@@ -538,6 +538,15 @@ bind_rows(three_day_est$plot_dat %>% mutate(inc_period="3d"),
                       values=cbbPalette[c(2,1,3)]) +
     theme_bw() +
     theme(axis.text=element_text(color="black"))
+```
+
+```{r inc-table}
+bind_rows(three_day_est$plot_dat %>% mutate(inc_period="3d"),
+          seven_day_est$plot_dat %>% mutate(inc_period="7d")) %>%
+    select(day=days_since_exposure, inc_period, for_med, for_lb, for_ub) %>% 
+    filter(day<14) %>% 
+    mutate_at(vars(starts_with("for")), function(x) round(100*x,1)) %>% 
+    knitr::kable()
 ```
 
 Changing the length of the incubation period changes the progression of the false omission rate (post-test probability given test negative).
