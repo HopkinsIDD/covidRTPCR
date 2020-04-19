@@ -36,8 +36,8 @@ data {
 parameters{
     real beta_0;
     real beta_1;
-    real<upper=0> beta_2;
-    real<lower=0> beta_3;
+    real beta_2;
+    real beta_3;
     real<lower=0> sigma;
     vector[J] eta;
     real<lower=0, upper=1> attack_rate;
