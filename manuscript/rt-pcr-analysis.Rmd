@@ -15,28 +15,37 @@ options(mc.cores=4,
 ```{r library}
 library(tidyverse)
 library(rstan)
+## color blind palette
 cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+## Stan settings
 n_iter <- 1e4
 n_warmup <- 1e4-5e3
 p_adapt_delta <- 0.99
 n_max_treedepth <- 20
+## the max number of days after exposure to estimate
 T_max <- 21
 
 source("R/utils.R")
 
+## read in raw data
 raw_data <- read_csv("data/antibody-test-data.csv") %>% 
     filter(grepl("RT_PCR", test),
            study != "Danis_no_4")
 
 pcr_dat <- raw_data %>% 
+    ## add non-quantified positives to other positives for Danis et al.
     mutate(n_adj=n+nqp,
            test_pos_adj=test_pos+nqp) %>% 
+    ## remove estimates without observations
     filter(n_adj > 0,
+           ## days needs to be above -5
            day > -5,
+           ## only use the nasal swabs from Kujawski, not throat swabs
            !(study == "Kujawski" & test == "RT_PCR_oro")) %>% 
     mutate(study_idx=paste(study, test, sep="_") %>% as.factor() %>% as.numeric(),
            pct_pos=test_pos_adj/n_adj)
 
+## make the data for a 3-day incubation period
 pcr_dat3 <- raw_data %>% 
     mutate(n_adj=n+nqp,
            test_pos_adj=test_pos+nqp) %>% 
@@ -46,28 +55,31 @@ pcr_dat3 <- raw_data %>%
     mutate(study_idx=paste(study, test, sep="_") %>% as.factor() %>% as.numeric(),
            pct_pos=test_pos_adj/n_adj)
 
+## make the data for a 7-day incubation period
 pcr_dat7 <- raw_data %>% 
     mutate(n_adj=n+nqp,
            test_pos_adj=test_pos+nqp) %>% 
-    filter(
-           n_adj > 0,
+    filter(n_adj > 0,
            day > -7,
            !(study == "Kujawski" & test == "RT_PCR_oro")) %>% 
     mutate(study_idx=paste(study, test, sep="_") %>% as.factor() %>% as.numeric(),
            pct_pos=test_pos_adj/n_adj)
 
+## only nasal swabs
 naso_dat <- pcr_dat %>% 
     filter(grepl("RT_PCR_naso", test)) %>% 
     mutate(study_idx=paste(study, test, sep="_") %>% as.factor()
            %>% as.numeric(),
            pct_pos=test_pos_adj/n_adj)
 
+## only throat swabs
 oro_dat <- pcr_dat %>% 
     filter(grepl("RT_PCR_oro", test)) %>% 
     mutate(study_idx=paste(study, test, sep="_") %>% as.factor()
            %>% as.numeric(),
            pct_pos=test_pos_adj/n_adj)
 
+## data for sensitivity analysis, where inconclusives are classified as negative
 kuj_neg_dat <- raw_data %>% 
     mutate(n_adj = n+inconclusive+nqp,
            test_pos_adj = test_pos) %>% 
@@ -78,6 +90,7 @@ kuj_neg_dat <- raw_data %>%
            %>% as.numeric(),
            pct_pos=test_pos_adj/n_adj)
 
+## data for sensitivity analysis, where inconclusives are classified as positive
 kuj_pos_dat <- raw_data %>% 
     mutate(n_adj = n+inconclusive+nqp,
            test_pos_adj = test_pos+inconclusive+nqp) %>% 
@@ -89,24 +102,25 @@ kuj_pos_dat <- raw_data %>%
            %>% as.numeric(),
            pct_pos=test_pos_adj/n_adj)
 
+## create orthogonal polynomials for days since exposure
 day_poly <- poly(log(pcr_dat$day+5), degree=3)
 day_poly3 <- poly(log(pcr_dat3$day+3), degree=3)
 day_poly7 <- poly(log(pcr_dat7$day+7), degree=3)
 day_poly_guo <- poly(log(pcr_dat$day_min+5), degree=3)
 day_poly_kuj <- poly(log(kuj_neg_dat$day_min+5), degree=3)
 
-poly_predict <- predict(day_poly, log(1:21))
-poly_predict3 <- predict(day_poly3, log(1:21))
-poly_predict7 <- predict(day_poly7, log(1:21))
-poly_predict_guo <- predict(day_poly_guo, log(1:21))
-poly_predict_kuj <- predict(day_poly_kuj, log(1:21))
+poly_predict <- predict(day_poly, log(1:T_max))
+poly_predict3 <- predict(day_poly3, log(1:T_max))
+poly_predict7 <- predict(day_poly7, log(1:T_max))
+poly_predict_guo <- predict(day_poly_guo, log(1:T_max))
+poly_predict_kuj <- predict(day_poly_kuj, log(1:T_max))
 ```
 
-In this paper, we will try to determine the probability that someone has covid-19 given a negative RT-PCR test.
+This code complements the submission "Variation in False Negative Rate of RT-PCR Based SARS-CoV-2 Tests by Time Since Exposure"
 
 ## Methods
 
-[Zhao et al. (2020)](https://academic.oup.com/cid/advance-article/doi/10.1093/cid/ciaa344/5812996), [Liu et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.06.20031856v1), [Guo et al. (2020)](https://academic.oup.com/cid/article-abstract/doi/10.1093/cid/ciaa310/5810754), and [Wölfel et al. (2020)](https://www.nature.com/articles/s41586-020-2196-x) looked at the sensitivity of the RT-PCR by time since symptom onset.
+[Zhao et al. (2020)](https://academic.oup.com/cid/advance-article/doi/10.1093/cid/ciaa344/5812996), [Liu et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.06.20031856v1), [Guo et al. (2020)](https://academic.oup.com/cid/article-abstract/doi/10.1093/cid/ciaa310/5810754), [Wölfel et al. (2020)](https://www.nature.com/articles/s41586-020-2196-x), [Danis et al. (2020)](https://academic.oup.com/cid/article/doi/10.1093/cid/ciaa424/5819060), [Kujawski et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.09.20032896v1.full), and [Kim et al. (2020)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7131901/) each looked at the sensitivity of the RT-PCR by time since symptom onset.
 
 ```{r raw-figures}
 raw_data %>% 
@@ -154,12 +168,10 @@ main_analysis <- make_analysis_data(stan_model=npv_onset_model,
                                                    test_n=pcr_dat$n_adj,
                                                    test_pos=pcr_dat$test_pos_adj,
                                                    study_idx=pcr_dat$study_idx,
-                                                   # t_symp_test=pcr_dat$day,
                                                    t_ort=as.matrix(day_poly),
                                                    t_new_ort=poly_predict,
                                                    exposed_n=686,
                                                    exposed_pos=77,
-                                                   # t_exp_symp=5,
                                                    spec=1),
                                     iter=n_iter,
                                     warmup=n_warmup,
@@ -170,7 +182,10 @@ main_analysis <- make_analysis_data(stan_model=npv_onset_model,
 ```
 
 ```{r main-figure}
+## check likelihood
 # main_analysis$stan_ll
+
+## false negative figure
 fnr_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
     geom_errorbar(aes(ymin=fnr_lb, ymax=fnr_ub), color="gray30") +
@@ -186,6 +201,7 @@ fnr_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
           axis.text.x=element_blank(),
           axis.ticks=element_blank())
 
+## false omission figure
 for_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
     geom_errorbar(aes(ymax=for_lb, ymin=for_ub), color="gray30") +
@@ -200,23 +216,10 @@ for_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
     theme(axis.text=element_text(color="black"))
 
 gridExtra::grid.arrange(fnr_fig, for_fig)
-
-# ggplot(main_analysis$plot_dat, aes(x=days_since_exposure)) +
-#     geom_hline(aes(yintercept=1), linetype="dashed") +
-#     geom_errorbar(aes(ymax=1-rr_lb, ymin=1-rr_ub), color="gray30") +
-#     geom_point(aes(y=1-rr_med)) +
-#     scale_x_continuous("Days since exposure",
-#                        breaks=seq(0, 21, 7),
-#                        limits=c(0,21.5)) +
-#     scale_y_log10("Relative risk of having a negative RT-PCR test",
-#                   breaks=2^c(-3:1),
-#                   labels=c("1/8", "1/4", "1/2", "1", "2")) +
-#     coord_cartesian(ylim=c(2^-3, 2^1)) +
-#     theme_bw() +
-#     theme(axis.text=element_text(color="black"))
 ```
 
 ```{r main-table}
+## make analysis table
 main_analysis$plot_dat %>% 
     rename(day=days_since_exposure) %>% 
     mutate_at(vars(-day), function(x) round(100*x,1)) %>% 
@@ -230,6 +233,8 @@ A day or two after exposure (3 or 4 days prior to symptoms), the test may have n
 Seven to nine days after exposure (roughly 2 to 4 days after symptom onset), the negative predictive value is around 95%, meaning there is about a 5% chance of actually being covid-19 positive despite testing negative.
 
 ```{r sub-est, cache=T, eval=F}
+## separate models for subset analyses of nasal and throat swabs
+## there weren't enough observations for the throat swab model to converge
 naso_est <- make_analysis_data(stan_model=npv_onset_model,
                                data_list=list(N=nrow(naso_dat),
                                               J=max(naso_dat$study_idx),
@@ -237,12 +242,10 @@ naso_est <- make_analysis_data(stan_model=npv_onset_model,
                                               test_n=naso_dat$n_adj,
                                               test_pos=naso_dat$test_pos_adj,
                                               study_idx=naso_dat$study_idx,
-                                              # t_symp_test=pcr_dat$day,
                                               t_ort=as.matrix(day_poly),
                                               t_new_ort=poly_predict,
                                               exposed_n=686,
                                               exposed_pos=77,
-                                              # t_exp_symp=5,
                                               spec=1),
                                iter=n_iter,
                                warmup=n_warmup,
@@ -257,12 +260,10 @@ oro_est <- make_analysis_data(stan_model=npv_onset_model,
                                              test_n=oro_dat$n_adj,
                                              test_pos=oro_dat$test_pos_adj,
                                              study_idx=oro_dat$study_idx,
-                                             # t_symp_test=pcr_dat$day,
                                              t_ort=as.matrix(day_poly),
                                              t_new_ort=poly_predict,
                                              exposed_n=686,
                                              exposed_pos=77,
-                                             # t_exp_symp=5,
                                              spec=1),
                               iter=n_iter,
                               warmup=n_warmup,
@@ -273,7 +274,7 @@ oro_est <- make_analysis_data(stan_model=npv_onset_model,
 
 ```{r plot-sub, eval=F}
 bind_rows(naso_est$plot_dat %>% mutate(test="naso"),
-          # oro_est$plot_dat %>% mutate(test="oro"),
+          oro_est$plot_dat %>% mutate(test="oro"),
           main_analysis$plot_dat %>% mutate(test="original")) %>% 
     ggplot(aes(x=days_since_exposure, fill=as.factor(test),
                color=as.factor(test))) +
@@ -308,12 +309,10 @@ spec_est <- make_analysis_data(stan_model=npv_onset_model,
                                               test_n=pcr_dat$n_adj,
                                               test_pos=pcr_dat$test_pos_adj,
                                               study_idx=pcr_dat$study_idx,
-                                              # t_symp_test=pcr_dat$day,
                                               t_ort=as.matrix(day_poly),
                                               t_new_ort=poly_predict,
                                               exposed_n=686,
                                               exposed_pos=77,
-                                              # t_exp_symp=5,
                                               spec=0.9),
                                iter=n_iter,
                                warmup=n_warmup,
@@ -374,12 +373,10 @@ half_est <- make_analysis_data(stan_model=npv_onset_model,
                                               test_n=pcr_dat$n_adj,
                                               test_pos=pcr_dat$test_pos_adj,
                                               study_idx=pcr_dat$study_idx,
-                                              # t_symp_test=pcr_dat$day,
                                               t_ort=as.matrix(day_poly),
                                               t_new_ort=poly_predict,
                                               exposed_n=686,
                                               exposed_pos=round(77/2),
-                                              # t_exp_symp=5,
                                               spec=1),
                                iter=n_iter,
                                warmup=n_warmup,
@@ -394,12 +391,10 @@ two_est <- make_analysis_data(stan_model=npv_onset_model,
                                              test_n=pcr_dat$n_adj,
                                              test_pos=pcr_dat$test_pos_adj,
                                              study_idx=pcr_dat$study_idx,
-                                             # t_symp_test=pcr_dat$day,
                                              t_ort=as.matrix(day_poly),
                                              t_new_ort=poly_predict,
                                              exposed_n=686,
                                              exposed_pos=77*2,
-                                             # t_exp_symp=5,
                                              spec=1),
                               iter=n_iter,
                               warmup=n_warmup,
@@ -414,12 +409,10 @@ four_est <- make_analysis_data(stan_model=npv_onset_model,
                                               test_n=pcr_dat$n_adj,
                                               test_pos=pcr_dat$test_pos_adj,
                                               study_idx=pcr_dat$study_idx,
-                                              # t_symp_test=pcr_dat$day,
                                               t_ort=as.matrix(day_poly),
                                               t_new_ort=poly_predict,
                                               exposed_n=686,
                                               exposed_pos=77*4,
-                                              # t_exp_symp=5,
                                               spec=1),
                                iter=n_iter,
                                warmup=n_warmup,
@@ -482,12 +475,10 @@ three_day_est <- make_analysis_data(stan_model=npv_onset_model,
                                                    test_n=pcr_dat3$n_adj,
                                                    test_pos=pcr_dat3$test_pos_adj,
                                                    study_idx=pcr_dat3$study_idx,
-                                                   # t_symp_test=pcr_dat3$day,
                                                    t_ort=as.matrix(day_poly3),
                                                    t_new_ort=poly_predict3,
                                                    exposed_n=686,
                                                    exposed_pos=77,
-                                                   # t_exp_symp=3,
                                                    spec=1),
                                     iter=n_iter,
                                     warmup=n_warmup,
@@ -502,12 +493,10 @@ seven_day_est <- make_analysis_data(stan_model=npv_onset_model,
                                                    test_n=pcr_dat7$n_adj,
                                                    test_pos=pcr_dat7$test_pos_adj,
                                                    study_idx=pcr_dat7$study_idx,
-                                                   # t_symp_test=pcr_dat7$day,
                                                    t_ort=as.matrix(day_poly7),
                                                    t_new_ort=poly_predict7,
                                                    exposed_n=686,
                                                    exposed_pos=77,
-                                                   # t_exp_symp=7,
                                                    spec=1),
                                     iter=n_iter,
                                     warmup=n_warmup,
@@ -566,12 +555,10 @@ guo_est <- make_analysis_data(stan_model=npv_onset_model,
                                              test_n=pcr_dat$n_adj,
                                              test_pos=pcr_dat$test_pos_adj,
                                              study_idx=pcr_dat$study_idx,
-                                             # t_symp_test=pcr_dat$day,
                                              t_ort=as.matrix(day_poly_guo),
                                              t_new_ort=poly_predict_guo,
                                              exposed_n=686,
                                              exposed_pos=77,
-                                             # t_exp_symp=5,
                                              spec=1),
                               iter=n_iter,
                               warmup=n_warmup,
@@ -646,12 +633,10 @@ kuj_neg <- make_analysis_data(stan_model=npv_onset_model,
                                              test_n=kuj_neg_dat$n_adj,
                                              test_pos=kuj_neg_dat$test_pos_adj,
                                              study_idx=kuj_neg_dat$study_idx,
-                                             # t_symp_test=pcr_dat$day,
                                              t_ort=as.matrix(day_poly_kuj),
                                              t_new_ort=poly_predict_kuj,
                                              exposed_n=686,
                                              exposed_pos=77,
-                                             # t_exp_symp=5,
                                              spec=1),
                               iter=n_iter,
                               warmup=n_warmup,
@@ -666,12 +651,10 @@ kuj_pos <- make_analysis_data(stan_model=npv_onset_model,
                                              test_n=kuj_pos_dat$n_adj,
                                              test_pos=kuj_pos_dat$test_pos_adj,
                                              study_idx=kuj_pos_dat$study_idx,
-                                             # t_symp_test=pcr_dat$day,
                                              t_ort=as.matrix(day_poly_kuj),
                                              t_new_ort=poly_predict_kuj,
                                              exposed_n=686,
                                              exposed_pos=77,
-                                             # t_exp_symp=5,
                                              spec=1),
                               iter=n_iter,
                               warmup=n_warmup,
