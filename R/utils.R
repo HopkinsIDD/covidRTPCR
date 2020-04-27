@@ -1,28 +1,42 @@
-make_analysis_data <- function(stan_model,
-                               data_list,
-                               p_adapt_delta,
-                               n_max_treedepth,
+make_analysis_data <- function(dat,
+                               stan_model,
+                               T_max,
+                               poly_est,
+                               poly_pred,
+                               exposed_n,
+                               exposed_pos,
+                               spec,
                                save_stan=F,
                                ...){
     ## sample from Stan model
-    stan_sample <- npv_est <- sampling(stan_model,
-                                       data=data_list,
-                                       ...)
+    stan_sample <- sampling(stan_model,
+                            data=list(N=nrow(dat),
+                                      J=max(dat$study_idx),
+                                      T_max=T_max,
+                                      test_n=dat$n_adj,
+                                      test_pos=dat$test_pos_adj,
+                                      study_idx=dat$study_idx,
+                                      t_ort=as.matrix(poly_est),
+                                      t_new_ort=poly_pred,
+                                      exposed_n=exposed_n,
+                                      exposed_pos=exposed_pos,
+                                      spec=spec),
+                            ...)
     ## get Stan likelihood
-    stan_ll <- loo::extract_log_lik(npv_est) %>% loo::loo()
+    stan_ll <- suppressWarnings(loo::extract_log_lik(stan_sample) %>% loo::loo())
 
     ## extract parameters
     ## sensitivity (sens) of PCR: P(PCR+ | covid+)
     ## false negative rate (fnr) of PCR: P(PCR- | covid+) = 1 - sens
-    sens <- extract(npv_est, pars="sens")[[1]]
+    sens <- extract(stan_sample, pars="sens")[[1]]
 
     ## negative predictive value (npv) of PCR: P(covid- | PCR-)
     ## false omission rate (FOR) of PCR: P(covid+ | PCR-) = 1 - npv
-    npv <- extract(npv_est, pars="npv")[[1]]
+    npv <- extract(stan_sample, pars="npv")[[1]]
 
     ## attack rate: P(covid+)
     ## P(covid-) = 1 - attack_rate
-    attack_rate <- extract(npv_est, pars="attack_rate")[[1]] %>% as.vector()
+    attack_rate <- extract(stan_sample, pars="attack_rate")[[1]] %>% as.vector()
 
     plot_dat <- as_tibble(sens) %>%
         gather("days", "sens") %>%

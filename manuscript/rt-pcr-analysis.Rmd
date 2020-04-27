@@ -24,6 +24,8 @@ p_adapt_delta <- 0.99
 n_max_treedepth <- 20
 ## the max number of days after exposure to estimate
 T_max <- 21
+exposed_n <- 686
+exposed_pos <- 77
 
 source("R/utils.R")
 
@@ -114,6 +116,21 @@ poly_predict3 <- predict(day_poly3, log(1:T_max))
 poly_predict7 <- predict(day_poly7, log(1:T_max))
 poly_predict_guo <- predict(day_poly_guo, log(1:T_max))
 poly_predict_kuj <- predict(day_poly_kuj, log(1:T_max))
+
+
+rv_dat <- raw_data %>% 
+    ## add non-quantified positives to other positives for Danis et al.
+    mutate(n_adj=n+nqp,
+           test_pos_adj=test_pos+nqp) %>% 
+    ## remove estimates without observations
+    filter(n_adj > 0,
+           ## days needs to be above -5
+           day >= 0,
+           ## only use the nasal swabs from Kujawski, not throat swabs
+           !(study == "Kujawski" & test == "RT_PCR_oro")) %>% 
+    mutate(study_idx=paste(study, test, sep="_") %>% as.factor() %>% as.numeric(),
+           pct_pos=test_pos_adj/n_adj)
+
 ```
 
 This code complements the submission "Variation in False Negative Rate of RT-PCR Based SARS-CoV-2 Tests by Time Since Exposure"
@@ -157,22 +174,22 @@ We use Stan for this analysis.
 
 ## Results
 
-```{r npv-fixed-onset, cache=T, eval=T, include=F}
+```{r stan-model, cache=T, include=F}
 ## fit a model to find the overall seroincidence across all observations
 npv_onset_model <- stan_model("Stan/npv-fixed-onset.stan")
+```
 
+
+```{r npv-fixed-onset, cache=T, eval=T, include=F}
+## run main analysis
 main_analysis <- make_analysis_data(stan_model=npv_onset_model,
-                                    data_list=list(N=nrow(pcr_dat),
-                                                   J=max(pcr_dat$study_idx),
-                                                   T_max=T_max,
-                                                   test_n=pcr_dat$n_adj,
-                                                   test_pos=pcr_dat$test_pos_adj,
-                                                   study_idx=pcr_dat$study_idx,
-                                                   t_ort=as.matrix(day_poly),
-                                                   t_new_ort=poly_predict,
-                                                   exposed_n=686,
-                                                   exposed_pos=77,
-                                                   spec=1),
+                                    dat=pcr_dat,
+                                    T_max=T_max,
+                                    poly_est=as.matrix(day_poly),
+                                    poly_pred=poly_predict,
+                                    exposed_n=exposed_n,
+                                    exposed_pos=exposed_pos,
+                                    spec=1,
                                     iter=n_iter,
                                     warmup=n_warmup,
                                     control=list(adapt_delta=p_adapt_delta,
@@ -236,40 +253,34 @@ Seven to nine days after exposure (roughly 2 to 4 days after symptom onset), the
 ## separate models for subset analyses of nasal and throat swabs
 ## there weren't enough observations for the throat swab model to converge
 naso_est <- make_analysis_data(stan_model=npv_onset_model,
-                               data_list=list(N=nrow(naso_dat),
-                                              J=max(naso_dat$study_idx),
-                                              T_max=T_max,
-                                              test_n=naso_dat$n_adj,
-                                              test_pos=naso_dat$test_pos_adj,
-                                              study_idx=naso_dat$study_idx,
-                                              t_ort=as.matrix(day_poly),
-                                              t_new_ort=poly_predict,
-                                              exposed_n=686,
-                                              exposed_pos=77,
-                                              spec=1),
-                               iter=n_iter,
-                               warmup=n_warmup,
-                               control=list(adapt_delta=p_adapt_delta,
-                                            max_treedepth=n_max_treedepth),
-                               save_warmup=F)
+                                    dat=naso_dat,
+                                    T_max=T_max,
+                                    poly_est=as.matrix(day_poly),
+                                    poly_pred=poly_predict,
+                                    exposed_n=exposed_n,
+                                    exposed_pos=exposed_pos,
+                                    spec=1,
+                                    iter=n_iter,
+                                    warmup=n_warmup,
+                                    control=list(adapt_delta=p_adapt_delta,
+                                                 max_treedepth=n_max_treedepth),
+                                    save_warmup=F,
+                                    save_stan=F)
 
 oro_est <- make_analysis_data(stan_model=npv_onset_model,
-                              data_list=list(N=nrow(oro_dat),
-                                             J=max(oro_dat$study_idx),
-                                             T_max=T_max,
-                                             test_n=oro_dat$n_adj,
-                                             test_pos=oro_dat$test_pos_adj,
-                                             study_idx=oro_dat$study_idx,
-                                             t_ort=as.matrix(day_poly),
-                                             t_new_ort=poly_predict,
-                                             exposed_n=686,
-                                             exposed_pos=77,
-                                             spec=1),
+                              dat=oro_dat,
+                              T_max=T_max,
+                              poly_est=as.matrix(day_poly),
+                              poly_pred=poly_predict,
+                              exposed_n=exposed_n,
+                              exposed_pos=exposed_pos,
+                              spec=1,
                               iter=n_iter,
                               warmup=n_warmup,
                               control=list(adapt_delta=p_adapt_delta,
                                            max_treedepth=n_max_treedepth),
-                              save_warmup=F)
+                              save_warmup=F,
+                              save_stan=F)
 ```
 
 ```{r plot-sub, eval=F}
@@ -303,22 +314,19 @@ To test this we fit the same model except with a specificity of 90% and compared
 
 ```{r sens-analysis-spec, cache=T, eval=T}
 spec_est <- make_analysis_data(stan_model=npv_onset_model,
-                               data_list=list(N=nrow(pcr_dat),
-                                              J=max(pcr_dat$study_idx),
-                                              T_max=T_max,
-                                              test_n=pcr_dat$n_adj,
-                                              test_pos=pcr_dat$test_pos_adj,
-                                              study_idx=pcr_dat$study_idx,
-                                              t_ort=as.matrix(day_poly),
-                                              t_new_ort=poly_predict,
-                                              exposed_n=686,
-                                              exposed_pos=77,
-                                              spec=0.9),
+                               dat=pcr_dat,
+                               T_max=T_max,
+                               poly_est=as.matrix(day_poly),
+                               poly_pred=poly_predict,
+                               exposed_n=exposed_n,
+                               exposed_pos=exposed_pos,
+                               spec=0.9,
                                iter=n_iter,
                                warmup=n_warmup,
                                control=list(adapt_delta=p_adapt_delta,
                                             max_treedepth=n_max_treedepth),
-                               save_warmup=F)
+                               save_warmup=F,
+                               save_stan=F)
 ```
 
 ```{r plot-spec}
@@ -367,58 +375,49 @@ We tested pre-test probabilities of half, twice, and four times that of Bi et al
 
 ```{r ar-est, cache=T, eval=T}
 half_est <- make_analysis_data(stan_model=npv_onset_model,
-                               data_list=list(N=nrow(pcr_dat),
-                                              J=max(pcr_dat$study_idx),
-                                              T_max=T_max,
-                                              test_n=pcr_dat$n_adj,
-                                              test_pos=pcr_dat$test_pos_adj,
-                                              study_idx=pcr_dat$study_idx,
-                                              t_ort=as.matrix(day_poly),
-                                              t_new_ort=poly_predict,
-                                              exposed_n=686,
-                                              exposed_pos=round(77/2),
-                                              spec=1),
+                               dat=pcr_dat,
+                               T_max=T_max,
+                               poly_est=as.matrix(day_poly),
+                               poly_pred=poly_predict,
+                               exposed_n=exposed_n,
+                               exposed_pos=round(exposed_pos/2),
+                               spec=1,
                                iter=n_iter,
                                warmup=n_warmup,
                                control=list(adapt_delta=p_adapt_delta,
                                             max_treedepth=n_max_treedepth),
-                               save_warmup=F)
+                               save_warmup=F,
+                               save_stan=F)
 
 two_est <- make_analysis_data(stan_model=npv_onset_model,
-                              data_list=list(N=nrow(pcr_dat),
-                                             J=max(pcr_dat$study_idx),
-                                             T_max=T_max,
-                                             test_n=pcr_dat$n_adj,
-                                             test_pos=pcr_dat$test_pos_adj,
-                                             study_idx=pcr_dat$study_idx,
-                                             t_ort=as.matrix(day_poly),
-                                             t_new_ort=poly_predict,
-                                             exposed_n=686,
-                                             exposed_pos=77*2,
-                                             spec=1),
+                              dat=pcr_dat,
+                              T_max=T_max,
+                              poly_est=as.matrix(day_poly),
+                              poly_pred=poly_predict,
+                              exposed_n=exposed_n,
+                              exposed_pos=exposed_pos*2,
+                              spec=1,
                               iter=n_iter,
                               warmup=n_warmup,
                               control=list(adapt_delta=p_adapt_delta,
                                            max_treedepth=n_max_treedepth),
-                              save_warmup=F)
+                              save_warmup=F,
+                              save_stan=F)
 
 four_est <- make_analysis_data(stan_model=npv_onset_model,
-                               data_list=list(N=nrow(pcr_dat),
-                                              J=max(pcr_dat$study_idx),
-                                              T_max=T_max,
-                                              test_n=pcr_dat$n_adj,
-                                              test_pos=pcr_dat$test_pos_adj,
-                                              study_idx=pcr_dat$study_idx,
-                                              t_ort=as.matrix(day_poly),
-                                              t_new_ort=poly_predict,
-                                              exposed_n=686,
-                                              exposed_pos=77*4,
-                                              spec=1),
+                               dat=pcr_dat,
+                               T_max=T_max,
+                               poly_est=as.matrix(day_poly),
+                               poly_pred=poly_predict,
+                               exposed_n=exposed_n,
+                               exposed_pos=exposed_pos*4,
+                               spec=1,
                                iter=n_iter,
                                warmup=n_warmup,
                                control=list(adapt_delta=p_adapt_delta,
                                             max_treedepth=n_max_treedepth),
-                               save_warmup=F)
+                               save_warmup=F,
+                               save_stan=F)
 ```
 
 ```{r plot-ar}
@@ -469,40 +468,34 @@ We originally assumed a 5-day incubation period, what if that was 3 or 7 days in
 
 ```{r inc-est, cache=T, eval=T}
 three_day_est <- make_analysis_data(stan_model=npv_onset_model,
-                                    data_list=list(N=nrow(pcr_dat3),
-                                                   J=max(pcr_dat3$study_idx),
-                                                   T_max=T_max,
-                                                   test_n=pcr_dat3$n_adj,
-                                                   test_pos=pcr_dat3$test_pos_adj,
-                                                   study_idx=pcr_dat3$study_idx,
-                                                   t_ort=as.matrix(day_poly3),
-                                                   t_new_ort=poly_predict3,
-                                                   exposed_n=686,
-                                                   exposed_pos=77,
-                                                   spec=1),
+                                    dat=pcr_dat3,
+                                    T_max=T_max,
+                                    poly_est=as.matrix(day_poly3),
+                                    poly_pred=poly_predict3,
+                                    exposed_n=exposed_n,
+                                    exposed_pos=exposed_pos,
+                                    spec=1,
                                     iter=n_iter,
                                     warmup=n_warmup,
                                     control=list(adapt_delta=p_adapt_delta,
                                                  max_treedepth=n_max_treedepth),
-                                    save_warmup=F)
+                                    save_warmup=F,
+                                    save_stan=F)
 
 seven_day_est <- make_analysis_data(stan_model=npv_onset_model,
-                                    data_list=list(N=nrow(pcr_dat7),
-                                                   J=max(pcr_dat7$study_idx),
-                                                   T_max=T_max,
-                                                   test_n=pcr_dat7$n_adj,
-                                                   test_pos=pcr_dat7$test_pos_adj,
-                                                   study_idx=pcr_dat7$study_idx,
-                                                   t_ort=as.matrix(day_poly7),
-                                                   t_new_ort=poly_predict7,
-                                                   exposed_n=686,
-                                                   exposed_pos=77,
-                                                   spec=1),
+                                    dat=pcr_dat7,
+                                    T_max=T_max,
+                                    poly_est=as.matrix(day_poly7),
+                                    poly_pred=poly_predict7,
+                                    exposed_n=exposed_n,
+                                    exposed_pos=exposed_pos,
+                                    spec=1,
                                     iter=n_iter,
                                     warmup=n_warmup,
                                     control=list(adapt_delta=p_adapt_delta,
                                                  max_treedepth=n_max_treedepth),
-                                    save_warmup=F)
+                                    save_warmup=F,
+                                    save_stan=F)
 ```
 
 ```{r plot-inc}
@@ -549,22 +542,19 @@ The timing of the days since symptom onset are ambiguous in Guo et al. and Kim e
 
 ```{r guo-est, cache=T, eval=T}
 guo_est <- make_analysis_data(stan_model=npv_onset_model,
-                              data_list=list(N=nrow(pcr_dat),
-                                             J=max(pcr_dat$study_idx),
-                                             T_max=T_max,
-                                             test_n=pcr_dat$n_adj,
-                                             test_pos=pcr_dat$test_pos_adj,
-                                             study_idx=pcr_dat$study_idx,
-                                             t_ort=as.matrix(day_poly_guo),
-                                             t_new_ort=poly_predict_guo,
-                                             exposed_n=686,
-                                             exposed_pos=77,
-                                             spec=1),
+                              dat=pcr_dat,
+                              T_max=T_max,
+                              poly_est=as.matrix(day_poly_guo),
+                              poly_pred=poly_predict_guo,
+                              exposed_n=exposed_n,
+                              exposed_pos=exposed_pos,
+                              spec=1,
                               iter=n_iter,
                               warmup=n_warmup,
                               control=list(adapt_delta=p_adapt_delta,
                                            max_treedepth=n_max_treedepth),
-                              save_warmup=F)
+                              save_warmup=F,
+                              save_stan=F)
 ```
 
 ```{r plot-guo, eval=T}
@@ -627,40 +617,34 @@ In our main analysis, we omit these swabs, but they could count as negative or p
 
 ```{r kuj-est, cache=T, eval=T}
 kuj_neg <- make_analysis_data(stan_model=npv_onset_model,
-                              data_list=list(N=nrow(kuj_neg_dat),
-                                             J=max(kuj_neg_dat$study_idx),
-                                             T_max=T_max,
-                                             test_n=kuj_neg_dat$n_adj,
-                                             test_pos=kuj_neg_dat$test_pos_adj,
-                                             study_idx=kuj_neg_dat$study_idx,
-                                             t_ort=as.matrix(day_poly_kuj),
-                                             t_new_ort=poly_predict_kuj,
-                                             exposed_n=686,
-                                             exposed_pos=77,
-                                             spec=1),
+                              dat=kuj_neg_dat,
+                              T_max=T_max,
+                              poly_est=as.matrix(day_poly_kuj),
+                              poly_pred=poly_predict_kuj,
+                              exposed_n=exposed_n,
+                              exposed_pos=exposed_pos,
+                              spec=1,
                               iter=n_iter,
                               warmup=n_warmup,
                               control=list(adapt_delta=p_adapt_delta,
                                            max_treedepth=n_max_treedepth),
-                              save_warmup=F)
+                              save_warmup=F,
+                              save_stan=F)
 
 kuj_pos <- make_analysis_data(stan_model=npv_onset_model,
-                              data_list=list(N=nrow(kuj_pos_dat),
-                                             J=max(kuj_pos_dat$study_idx),
-                                             T_max=T_max,
-                                             test_n=kuj_pos_dat$n_adj,
-                                             test_pos=kuj_pos_dat$test_pos_adj,
-                                             study_idx=kuj_pos_dat$study_idx,
-                                             t_ort=as.matrix(day_poly_kuj),
-                                             t_new_ort=poly_predict_kuj,
-                                             exposed_n=686,
-                                             exposed_pos=77,
-                                             spec=1),
+                              dat=kuj_pos_dat,
+                              T_max=T_max,
+                              poly_est=as.matrix(day_poly_kuj),
+                              poly_pred=poly_predict_kuj,
+                              exposed_n=exposed_n,
+                              exposed_pos=exposed_pos,
+                              spec=1,
                               iter=n_iter,
                               warmup=n_warmup,
                               control=list(adapt_delta=p_adapt_delta,
                                            max_treedepth=n_max_treedepth),
-                              save_warmup=F)
+                              save_warmup=F,
+                              save_stan=F)
 ```
 
 ```{r plot-kuj, eval=T}
@@ -691,3 +675,56 @@ bind_rows(kuj_neg$plot_dat %>% mutate(kuj="negative"),
 ```
 
 The results are barely changed by including inconclusive tests as negatives or positives instead of being omitted.
+
+### Leave one study out
+
+To see whether any study has undue influence over our results, we ran a leave-one-study out analysis to see if the results changed
+
+
+```{r loso-est, cache=T, eval=T}
+n_studies <- unique(pcr_dat$study)
+loso_dat <- c()
+for(i in n_studies){
+    tmp_loso <- filter(pcr_dat, study != i)
+    tmp_poly <- poly(log(tmp_loso$day+5), degree=3)
+    tmp_poly_pred <- predict(tmp_poly, log(1:T_max))
+    tmp_est <- make_analysis_data(stan_model=npv_onset_model,
+                                  dat=tmp_loso,
+                                  T_max=T_max,
+                                  poly_est=as.matrix(tmp_poly),
+                                  poly_pred=tmp_poly_pred,
+                                  exposed_n=exposed_n,
+                                  exposed_pos=exposed_pos,
+                                  spec=1,
+                                  iter=n_iter,
+                                  warmup=n_warmup,
+                                  control=list(adapt_delta=p_adapt_delta,
+                                               max_treedepth=n_max_treedepth),
+                                  save_warmup=F,
+                                  save_stan=F)
+    loso_dat <- bind_rows(loso_dat,
+                          tmp_est$plot_dat %>% mutate(left_out=i))
+}
+```
+
+```{r plot-loso, eval=T}
+bind_rows(loso_dat,
+    main_analysis$plot_dat %>% mutate(left_out="none")) %>% 
+    mutate(left_out=relevel(factor(left_out), "none")) %>% 
+    ggplot(aes(x=days_since_exposure, fill=left_out, color=left_out)) +
+    geom_vline(aes(xintercept=5), linetype="dashed") +
+    # geom_ribbon(aes(ymin=for_lb, ymax=for_ub), alpha=0.5) +
+    geom_line(aes(y=for_med), alpha=0.5) +
+    scale_x_continuous("",
+                       breaks=seq(0, 21, 7),
+                       limits=c(0,21.5)) +
+    scale_y_continuous("Post-test probability,\ngiven RT-PCR negative",
+                       limits=c(0,0.15)) +
+    scale_color_manual("Left out",
+                       values=cbbPalette) +
+    scale_fill_manual("Left out",
+                      values=cbbPalette) +
+    theme_bw() +
+    guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+    theme(axis.text=element_text(color="black"))
+```
