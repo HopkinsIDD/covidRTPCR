@@ -16,10 +16,10 @@ options(mc.cores=4,
 library(tidyverse)
 library(rstan)
 ## color blind palette
-cbbPalette <- c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+cbbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 ## Stan settings
-n_iter <- 1e4
-n_warmup <- 1e4-5e3
+n_iter <- 1500
+n_warmup <- 250
 p_adapt_delta <- 0.99
 n_max_treedepth <- 20
 ## the max number of days after exposure to estimate
@@ -137,7 +137,7 @@ This code complements the submission "Variation in False Negative Rate of RT-PCR
 
 ## Methods
 
-[Zhao et al. (2020)](https://academic.oup.com/cid/advance-article/doi/10.1093/cid/ciaa344/5812996), [Liu et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.06.20031856v1), [Guo et al. (2020)](https://academic.oup.com/cid/article-abstract/doi/10.1093/cid/ciaa310/5810754), [Wölfel et al. (2020)](https://www.nature.com/articles/s41586-020-2196-x), [Danis et al. (2020)](https://academic.oup.com/cid/article/doi/10.1093/cid/ciaa424/5819060), [Kujawski et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.09.20032896v1.full), and [Kim et al. (2020)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7131901/) each looked at the sensitivity of the RT-PCR by time since symptom onset.
+[Zhao et al. (2020)](https://academic.oup.com/cid/advance-article/doi/10.1093/cid/ciaa344/5812996), [Liu et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.06.20031856v1), [Guo et al. (2020)](https://academic.oup.com/cid/article-abstract/doi/10.1093/cid/ciaa310/5810754), [Wölfel et al. (2020)](https://www.nature.com/articles/s41586-020-2196-x), [Danis et al. (2020)](https://academic.oup.com/cid/article/doi/10.1093/cid/ciaa424/5819060), [Kujawski et al. (2020)](https://www.medrxiv.org/content/10.1101/2020.03.09.20032896v1.full), [Kim et al. (2020)](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7131901/), and [Young et al. (2020)](https://jamanetwork.com/journals/jama/article-abstract/2762688#note-JOI200030-1) each looked at the sensitivity of the RT-PCR by time since symptom onset.
 
 ```{r raw-figures}
 raw_data %>% 
@@ -153,7 +153,7 @@ raw_data %>%
                        labels=scales::percent) +
     scale_size_continuous("Number of\nobservations") +
     scale_color_manual("Study",
-                       values=cbbPalette[-1]) +
+                       values=cbbPalette) +
     guides(colour = guide_legend(override.aes = list(alpha = 1))) +
     theme_bw() +
     theme(axis.text = element_text(color="black"),
@@ -180,7 +180,7 @@ npv_onset_model <- stan_model("Stan/npv-fixed-onset.stan")
 ```
 
 
-```{r npv-fixed-onset, cache=T, eval=T, include=F}
+```{r npv-fixed-onset, cache=F, eval=T, include=F}
 ## run main analysis
 main_analysis <- make_analysis_data(stan_model=npv_onset_model,
                                     dat=pcr_dat,
@@ -249,7 +249,7 @@ Due to the decline in sensitivity over time, the RT-PCR test is best deployed ab
 A day or two after exposure (3 or 4 days prior to symptoms), the test may have no utility at all, and thus the probability of having been infected is would be the same with or without an RT-PCR, in our case about 11%.
 Seven to nine days after exposure (roughly 2 to 4 days after symptom onset), the negative predictive value is around 95%, meaning there is about a 5% chance of actually being covid-19 positive despite testing negative.
 
-```{r sub-est, cache=T, eval=F}
+```{r sub-est, cache=F, eval=F}
 ## separate models for subset analyses of nasal and throat swabs
 ## there weren't enough observations for the throat swab model to converge
 naso_est <- make_analysis_data(stan_model=npv_onset_model,
@@ -312,7 +312,7 @@ bind_rows(naso_est$plot_dat %>% mutate(test="naso"),
 What if the specificity of the test is less than 100%?
 To test this we fit the same model except with a specificity of 90% and compared the results to the original (the sensitivity remained the same).
 
-```{r sens-analysis-spec, cache=T, eval=T}
+```{r sens-analysis-spec, cache=F, eval=T}
 spec_est <- make_analysis_data(stan_model=npv_onset_model,
                                dat=pcr_dat,
                                T_max=T_max,
@@ -373,7 +373,7 @@ The best time to test is still 2-4 days post-symptom onset.
 
 We tested pre-test probabilities of half, twice, and four times that of Bi et al. (2020).
 
-```{r ar-est, cache=T, eval=T}
+```{r ar-est, cache=F, eval=T}
 half_est <- make_analysis_data(stan_model=npv_onset_model,
                                dat=pcr_dat,
                                T_max=T_max,
@@ -466,7 +466,7 @@ Regardless, the best time to test is still 2-4 days after symptom onset.
 
 We originally assumed a 5-day incubation period, what if that was 3 or 7 days instead?
 
-```{r inc-est, cache=T, eval=T}
+```{r inc-est, cache=F, eval=T}
 three_day_est <- make_analysis_data(stan_model=npv_onset_model,
                                     dat=pcr_dat3,
                                     T_max=T_max,
@@ -540,7 +540,7 @@ Since the sensitivity is calibrated with respect to the time of symptom onset, a
 
 The timing of the days since symptom onset are ambiguous in Guo et al. and Kim et al., where day 1 may mean one day since symptom onset or the first day of symptoms.
 
-```{r guo-est, cache=T, eval=T}
+```{r guo-est, cache=F, eval=T}
 guo_est <- make_analysis_data(stan_model=npv_onset_model,
                               dat=pcr_dat,
                               T_max=T_max,
@@ -615,7 +615,7 @@ The overlap in credible intervals indicates that the estimates are roughly equiv
 Kujawski et al. and Danis et al. reported `r sum(pcr_dat$inconclusive)` inconclusive tests combined in their data.
 In our main analysis, we omit these swabs, but they could count as negative or positive tests instead.
 
-```{r kuj-est, cache=T, eval=T}
+```{r kuj-est, cache=F, eval=T}
 kuj_neg <- make_analysis_data(stan_model=npv_onset_model,
                               dat=kuj_neg_dat,
                               T_max=T_max,
@@ -681,7 +681,7 @@ The results are barely changed by including inconclusive tests as negatives or p
 To see whether any study has undue influence over our results, we ran a leave-one-study out analysis to see if the results changed
 
 
-```{r loso-est, cache=T, eval=T}
+```{r loso-est, cache=F, eval=T}
 n_studies <- unique(pcr_dat$study)
 loso_dat <- c()
 for(i in n_studies){
@@ -708,9 +708,7 @@ for(i in n_studies){
 ```
 
 ```{r plot-loso, eval=T}
-bind_rows(loso_dat,
-    main_analysis$plot_dat %>% mutate(left_out="none")) %>% 
-    mutate(left_out=relevel(factor(left_out), "none")) %>% 
+loso_dat %>% 
     ggplot(aes(x=days_since_exposure, fill=left_out, color=left_out)) +
     geom_vline(aes(xintercept=5), linetype="dashed") +
     # geom_ribbon(aes(ymin=for_lb, ymax=for_ub), alpha=0.5) +
