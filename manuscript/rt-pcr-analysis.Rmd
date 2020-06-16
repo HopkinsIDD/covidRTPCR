@@ -232,7 +232,7 @@ for_fig <- ggplot(data=main_analysis$plot_dat, aes(x=days_since_exposure)) +
     theme_bw() +
     theme(axis.text=element_text(color="black"))
 
-gridExtra::grid.arrange(fnr_fig, for_fig)
+gridExtra::grid.arrange(fnr_fig, for_fig, top="Fixed onset including Young et al.")
 ```
 
 ```{r main-table}
@@ -329,7 +329,7 @@ spec_est <- make_analysis_data(stan_model=npv_onset_model,
                                save_stan=F)
 ```
 
-```{r plot-spec}
+```{r plot-spec, eval=T}
 spec_est$plot_dat %>% 
     mutate(spec="90%") %>% 
     bind_rows(main_analysis$plot_dat %>% mutate(spec="100%")) %>% 
@@ -353,7 +353,7 @@ spec_est$plot_dat %>%
     theme(axis.text=element_text(color="black"))
 ```
 
-```{r spec-table}
+```{r spec-table, eval=T}
 spec_est$plot_dat %>% 
     select(day=days_since_exposure, for_90=for_med) %>% 
     left_join(main_analysis$plot_dat %>% 
@@ -420,7 +420,7 @@ four_est <- make_analysis_data(stan_model=npv_onset_model,
                                save_stan=F)
 ```
 
-```{r plot-ar}
+```{r plot-ar, eval=T}
 bind_rows(half_est$plot_dat %>% mutate(ar_idx="half"),
           two_est$plot_dat %>% mutate(ar_idx="2x"),
           four_est$plot_dat %>% mutate(ar_idx="4x"),
@@ -446,7 +446,7 @@ bind_rows(half_est$plot_dat %>% mutate(ar_idx="half"),
     theme(axis.text=element_text(color="black"))
 ```
 
-```{r ar-table}
+```{r ar-table, eval=T}
 bind_rows(half_est$plot_dat %>% mutate(ar_idx="half"),
           two_est$plot_dat %>% mutate(ar_idx="2x"),
           four_est$plot_dat %>% mutate(ar_idx="4x")) %>% 
@@ -498,7 +498,7 @@ seven_day_est <- make_analysis_data(stan_model=npv_onset_model,
                                     save_stan=F)
 ```
 
-```{r plot-inc}
+```{r plot-inc, eval=T}
 bind_rows(three_day_est$plot_dat %>% mutate(inc_period="3d"),
           seven_day_est$plot_dat %>% mutate(inc_period="7d"),
           main_analysis$plot_dat %>% mutate(inc_period="5d")) %>% 
@@ -522,7 +522,7 @@ bind_rows(three_day_est$plot_dat %>% mutate(inc_period="3d"),
     theme(axis.text=element_text(color="black"))
 ```
 
-```{r inc-table}
+```{r inc-table, eval=T}
 bind_rows(three_day_est$plot_dat %>% mutate(inc_period="3d"),
           seven_day_est$plot_dat %>% mutate(inc_period="7d")) %>%
     select(day=days_since_exposure, inc_period, for_med, for_lb, for_ub) %>% 
@@ -725,4 +725,114 @@ loso_dat %>%
     theme_bw() +
     guides(colour = guide_legend(override.aes = list(alpha = 1))) +
     theme(axis.text=element_text(color="black"))
+```
+
+```{r rv-model, cache=T, eval=T}
+## fit a model where the incubation time is a random variable
+npv_rv_model <- stan_model("Stan/npv-analysis.stan")
+```
+
+```{r rv-est, eval=T}
+rv_est <- sampling(npv_rv_model,
+                   data=list(N=nrow(rv_dat),
+                             J=max(rv_dat$study_idx),
+                             T_max=T_max,
+                             test_n=rv_dat$n_adj,
+                             test_pos=rv_dat$test_pos_adj,
+                             t_symp_test=rv_dat$day,
+                             study_idx=rv_dat$study_idx,
+                             exposed_n=686,
+                             exposed_pos=77,
+                             spec=1),
+                   iter=n_iter,
+                   warmup=n_warmup,
+                   control=list(adapt_delta=p_adapt_delta,
+                                max_treedepth=n_max_treedepth),
+                   save_warmup=F)
+## get Stan likelihood
+# loo::extract_log_lik(rv_est) %>% loo::loo()
+
+## extract parameters
+## sensitivity (sens) of PCR: P(PCR+ | covid+)
+## false negative rate (fnr) of PCR: P(PCR- | covid+) = 1 - sens
+sens <- extract(rv_est, pars="sens")[[1]]
+
+## negative predictive value (npv) of PCR: P(covid- | PCR-)
+## false omission rate (FOR) of PCR: P(covid+ | PCR-) = 1 - npv
+npv <- extract(rv_est, pars="npv")[[1]]
+
+## attack rate: P(covid+)
+## P(covid-) = 1 - attack_rate
+attack_rate <- extract(rv_est, pars="attack_rate")[[1]] %>% as.vector()
+rm(rv_est)
+```
+
+```{r plot-rv, eval=T}
+plot_dat <- as_tibble(sens) %>%
+    gather("days", "sens") %>%
+    mutate(days_since_exposure=gsub(pattern="V", "", days) %>% as.numeric) %>%
+    bind_cols(as_tibble(npv) %>%
+                  gather("days", "npv") %>%
+                  mutate(ar=rep(attack_rate, ncol(sens))) %>%
+                  select(-days)) %>%
+    group_by(days_since_exposure) %>%
+    summarise(fnr_med=median(1-sens),
+              fnr_lb=quantile(1-sens,probs=.025),
+              fnr_ub=quantile(1-sens,probs=.975),
+              for_med=median(1-npv),
+              for_lb=quantile(1-npv,probs=.025),
+              for_ub=quantile(1-npv,probs=.975),
+              rr_med=median(1-(1-npv)/ar),
+              rr_lb=quantile(1-(1-npv)/ar,probs=.025),
+              rr_ub=quantile(1-(1-npv)/ar,probs=.975),
+              abs_med=median(ar-(1-npv)),
+              abs_lb=quantile(ar-(1-npv),probs=.025),
+              abs_ub=quantile(ar-(1-npv),probs=.975))
+
+for_rv <- plot_dat %>% 
+    mutate(type="rv") %>% 
+    # bind_rows(main_analysis$plot_dat %>% mutate(type="fixed")) %>%
+    ggplot(aes(x=days_since_exposure)) +
+    geom_errorbar(aes(ymax=for_lb, ymin=for_ub), color="gray30") +
+    geom_point(aes(y=for_med)) +
+    scale_x_continuous("Days since exposure",
+                       breaks=seq(0, 21, 7),
+                       limits=c(0,21.5)) +
+    scale_y_continuous("Post-test probability,\ngiven RT-PCR negative",
+                       limits=c(0, 0.15),
+                       breaks=seq(0,0.15, 0.05)) +
+    theme_bw() +
+    theme(axis.text=element_text(color="black"))
+
+
+fnr_rv <- plot_dat %>% 
+    mutate(type="rv") %>% 
+    # bind_rows(main_analysis$plot_dat %>% mutate(type="fixed")) %>%
+    ggplot(aes(x=days_since_exposure)) +
+    geom_errorbar(aes(ymin=fnr_lb, ymax=fnr_ub), color="gray30") +
+    geom_point(aes(y=fnr_med)) +
+    scale_x_continuous("",
+                       breaks=seq(0, 21, 7),
+                       limits=c(0,21.5)) +
+    scale_y_continuous("Probability RT-PCR negative,\ngiven covid-19 positive",
+                       limits=c(0,1)) +
+    theme_bw() +
+    theme(axis.text.y=element_text(color="black"),
+          axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks=element_blank())
+
+
+gridExtra::grid.arrange(fnr_rv, for_rv, top="Incubation period as random variable")
+```
+
+```{r rv-table, eval=T}
+plot_dat %>% 
+    # select(day=days_since_exposure, for_90=for_med) %>% 
+    # left_join(main_analysis$plot_dat %>% 
+    #               select(day=days_since_exposure, for_med)) %>% 
+    # mutate(rr=for_90/for_med,
+    #        abs_diff=for_90-for_med) %>% 
+    mutate_at(vars(-days_since_exposure), function(x) round(100*x,1)) %>% 
+    knitr::kable()
 ```
