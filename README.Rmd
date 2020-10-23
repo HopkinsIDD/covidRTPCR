@@ -1,8 +1,9 @@
 ---
-title: "Probability of covid-19 infection given RT-PCR negative"
-author: "Stephen A Lauer"
-output: html_document
+title: "Analysis of RT-PCR sensitivity by day since exposure or symptom onset"
+output: md_document
 ---
+[![DOI](https://zenodo.org/badge/255359652.svg)](https://zenodo.org/badge/latestdoi/255359652)
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
@@ -469,9 +470,9 @@ bind_rows(half_est$plot_dat %>% mutate(ar_idx="half"),
 bind_rows(half_est$plot_dat %>% mutate(ar_idx="half"),
           two_est$plot_dat %>% mutate(ar_idx="2x"),
           four_est$plot_dat %>% mutate(ar_idx="4x")) %>% 
-    select(day=days_since_exposure, ar_idx, for_med, for_lb, for_ub) %>% 
+    select(day=days_since_exposure, `attack rate`=ar_idx, FOR=for_med, `FOR LB`=for_lb, `FOR UB`=for_ub) %>% 
     filter(day<10) %>% 
-    mutate_at(vars(starts_with("for")), function(x) round(100*x,1)) %>% 
+    mutate_at(vars(starts_with("FOR")), function(x) round(100*x,1)) %>% 
     knitr::kable()
 ```
 
@@ -540,9 +541,9 @@ bind_rows(three_day_est$plot_dat %>% mutate(inc_period="3d"),
 ```{r inc-table, eval=T}
 bind_rows(three_day_est$plot_dat %>% mutate(inc_period="3d"),
           seven_day_est$plot_dat %>% mutate(inc_period="7d")) %>%
-    select(day=days_since_exposure, inc_period, for_med, for_lb, for_ub) %>% 
+    select(day=days_since_exposure, `inc period`=inc_period, FOR=for_med, `FOR LB`=for_lb, `FOR UB`=for_ub) %>% 
     filter(day<14) %>% 
-    mutate_at(vars(starts_with("for")), function(x) round(100*x,1)) %>% 
+    mutate_at(vars(starts_with("FOR")), function(x) round(100*x,1)) %>% 
     knitr::kable()
 ```
 
@@ -743,7 +744,7 @@ loso_dat %>%
 
 ### Incubation period as a random variable
 
-```{r rv-model, cache=T, eval=T}
+```{r rv-model, cache=F, eval=T}
 ## fit a model where the incubation time is a random variable
 npv_rv_model <- stan_model("Stan/npv-analysis.stan")
 ```
