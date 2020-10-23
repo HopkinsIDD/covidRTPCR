@@ -6,7 +6,7 @@ output: md_document
 
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE, error=FALSE)
 knitr::opts_knit$set(root.dir = here::here())
 
 options(mc.cores=4,
@@ -259,10 +259,10 @@ main_analysis$plot_dat %>%
 ```
 
 
-With no data on RT-PCR to time prior to symptom onset, the estimates of sensitivity at or below day five are low with large credible intervals.
+With little data on RT-PCR to time prior to symptom onset, the estimates of sensitivity at or below day five are low with large credible intervals.
 Due to the decline in sensitivity over time, the RT-PCR test is best deployed about a week after exposure.
-A day or two after exposure (3 or 4 days prior to symptoms), the test may have no utility at all, and thus the probability of having been infected is would be the same with or without an RT-PCR, in our case about 11%.
-Seven to nine days after exposure (roughly 2 to 4 days after symptom onset), the negative predictive value is around 95%, meaning there is about a 5% chance of actually being covid-19 positive despite testing negative.
+A day or two after exposure (3 or 4 days prior to symptoms), the test may have no utility at all, and thus the probability of having been infected is would be the same with or without an RT-PCR.
+Seven to nine days after exposure (roughly 2 to 4 days after symptom onset), the negative predictive value is around 97.5%, meaning there is about a 2.5% chance of actually being covid-19 positive despite testing negative (given a 15% attack rate).
 
 ```{r sub-est, cache=F, eval=F}
 ## separate models for subset analyses of nasal and throat swabs
@@ -387,7 +387,7 @@ spec_est$plot_dat %>%
 The shape of the curve for 90% specificity is similar to that of 100%, though slightly elevated.
 The best time to test is still 2-4 days post-symptom onset.
 
-\pagebreak
+
 
 ### Different pre-test probabilities
 
@@ -476,7 +476,7 @@ bind_rows(half_est$plot_dat %>% mutate(ar_idx="half"),
     knitr::kable()
 ```
 
-\pagebreak
+
 
 ### Different incubation period lengths
 
@@ -550,7 +550,7 @@ bind_rows(three_day_est$plot_dat %>% mutate(inc_period="3d"),
 Changing the length of the incubation period changes the progression of the false omission rate (post-test probability given test negative).
 Since the sensitivity is calibrated with respect to the time of symptom onset, an earlier onset time leads to a quicker drop in false omission rate and a later onset time leads to a slower drop.
 
-\pagebreak
+
 
 ### Shift ambiguous days one day earlier
 
@@ -624,7 +624,7 @@ Shifting the timing of ambiguous days one day earlier improves the median sensit
 The log-likelihoods for each model are nearly identical with the shifted days being minutely better.
 The overlap in credible intervals indicates that the estimates are roughly equivalent.
 
-\pagebreak
+
 
 ### Inconclusive tests as negatives or positives
 

@@ -1,7 +1,7 @@
 [![DOI](https://zenodo.org/badge/255359652.svg)](https://zenodo.org/badge/latestdoi/255359652)
 
-This code complements the submission “Variation in False Negative Rate
-of RT-PCR Based SARS-CoV-2 Tests by Time Since Exposure”
+This code complements the submission “[Variation in False Negative Rate
+of RT-PCR Based SARS-CoV-2 Tests by Time Since Exposure](https://www.acpjournals.org/doi/full/10.7326/M20-1495)”
 
 Methods
 -------
@@ -214,16 +214,16 @@ Results
 </tbody>
 </table>
 
-With no data on RT-PCR to time prior to symptom onset, the estimates of
-sensitivity at or below day five are low with large credible intervals.
-Due to the decline in sensitivity over time, the RT-PCR test is best
-deployed about a week after exposure. A day or two after exposure (3 or
-4 days prior to symptoms), the test may have no utility at all, and thus
-the probability of having been infected is would be the same with or
-without an RT-PCR, in our case about 11%. Seven to nine days after
-exposure (roughly 2 to 4 days after symptom onset), the negative
-predictive value is around 95%, meaning there is about a 5% chance of
-actually being covid-19 positive despite testing negative.
+With little data on RT-PCR to time prior to symptom onset, the estimates
+of sensitivity at or below day five are low with large credible
+intervals. Due to the decline in sensitivity over time, the RT-PCR test
+is best deployed about a week after exposure. A day or two after
+exposure (3 or 4 days prior to symptoms), the test may have no utility
+at all, and thus the probability of having been infected is would be the
+same with or without an RT-PCR. Seven to nine days after exposure
+(roughly 2 to 4 days after symptom onset), the negative predictive value
+is around 97.5%, meaning there is about a 2.5% chance of actually being
+covid-19 positive despite testing negative (given a 15% attack rate).
 
 Sensitivity analyses
 --------------------
@@ -901,11 +901,11 @@ leave-one-study out analysis to see if the results changed.
 <tr class="odd">
 <td style="text-align: right;">1</td>
 <td style="text-align: right;">100.0</td>
-<td style="text-align: right;">99.9</td>
+<td style="text-align: right;">100.0</td>
 <td style="text-align: right;">100.0</td>
 <td style="text-align: right;">11.3</td>
 <td style="text-align: right;">8.9</td>
-<td style="text-align: right;">13.7</td>
+<td style="text-align: right;">13.9</td>
 <td style="text-align: right;">0.0</td>
 <td style="text-align: right;">0.0</td>
 <td style="text-align: right;">0.0</td>
@@ -916,284 +916,284 @@ leave-one-study out analysis to see if the results changed.
 <tr class="even">
 <td style="text-align: right;">2</td>
 <td style="text-align: right;">100.0</td>
-<td style="text-align: right;">82.0</td>
+<td style="text-align: right;">86.8</td>
 <td style="text-align: right;">100.0</td>
 <td style="text-align: right;">11.2</td>
 <td style="text-align: right;">8.4</td>
-<td style="text-align: right;">13.7</td>
+<td style="text-align: right;">13.9</td>
 <td style="text-align: right;">0.0</td>
 <td style="text-align: right;">0.0</td>
-<td style="text-align: right;">16.1</td>
+<td style="text-align: right;">11.7</td>
 <td style="text-align: right;">0.0</td>
 <td style="text-align: right;">0.0</td>
-<td style="text-align: right;">1.9</td>
+<td style="text-align: right;">1.4</td>
 </tr>
 <tr class="odd">
 <td style="text-align: right;">3</td>
-<td style="text-align: right;">99.2</td>
-<td style="text-align: right;">38.7</td>
+<td style="text-align: right;">99.1</td>
+<td style="text-align: right;">44.8</td>
 <td style="text-align: right;">100.0</td>
 <td style="text-align: right;">10.9</td>
-<td style="text-align: right;">4.6</td>
-<td style="text-align: right;">13.5</td>
-<td style="text-align: right;">0.7</td>
+<td style="text-align: right;">5.1</td>
+<td style="text-align: right;">13.6</td>
+<td style="text-align: right;">0.8</td>
 <td style="text-align: right;">0.0</td>
-<td style="text-align: right;">58.5</td>
+<td style="text-align: right;">52.4</td>
 <td style="text-align: right;">0.1</td>
 <td style="text-align: right;">0.0</td>
-<td style="text-align: right;">6.7</td>
+<td style="text-align: right;">5.8</td>
 </tr>
 <tr class="even">
 <td style="text-align: right;">4</td>
-<td style="text-align: right;">81.6</td>
-<td style="text-align: right;">21.7</td>
-<td style="text-align: right;">99.2</td>
-<td style="text-align: right;">9.2</td>
-<td style="text-align: right;">2.7</td>
+<td style="text-align: right;">80.2</td>
+<td style="text-align: right;">24.8</td>
+<td style="text-align: right;">99.0</td>
+<td style="text-align: right;">9.0</td>
+<td style="text-align: right;">3.0</td>
 <td style="text-align: right;">12.6</td>
-<td style="text-align: right;">16.7</td>
-<td style="text-align: right;">0.7</td>
-<td style="text-align: right;">76.2</td>
-<td style="text-align: right;">1.9</td>
+<td style="text-align: right;">17.9</td>
+<td style="text-align: right;">0.9</td>
+<td style="text-align: right;">72.8</td>
+<td style="text-align: right;">2.0</td>
 <td style="text-align: right;">0.1</td>
-<td style="text-align: right;">8.7</td>
+<td style="text-align: right;">8.4</td>
 </tr>
 <tr class="odd">
 <td style="text-align: right;">5</td>
-<td style="text-align: right;">47.1</td>
-<td style="text-align: right;">16.2</td>
-<td style="text-align: right;">85.3</td>
-<td style="text-align: right;">5.6</td>
-<td style="text-align: right;">2.0</td>
-<td style="text-align: right;">10.2</td>
-<td style="text-align: right;">49.9</td>
-<td style="text-align: right;">13.3</td>
-<td style="text-align: right;">82.1</td>
-<td style="text-align: right;">5.6</td>
-<td style="text-align: right;">1.5</td>
-<td style="text-align: right;">9.6</td>
+<td style="text-align: right;">45.7</td>
+<td style="text-align: right;">17.5</td>
+<td style="text-align: right;">83.4</td>
+<td style="text-align: right;">5.5</td>
+<td style="text-align: right;">2.1</td>
+<td style="text-align: right;">10.1</td>
+<td style="text-align: right;">51.2</td>
+<td style="text-align: right;">14.9</td>
+<td style="text-align: right;">80.8</td>
+<td style="text-align: right;">5.7</td>
+<td style="text-align: right;">1.7</td>
+<td style="text-align: right;">9.7</td>
 </tr>
 <tr class="even">
 <td style="text-align: right;">6</td>
-<td style="text-align: right;">28.5</td>
-<td style="text-align: right;">13.9</td>
-<td style="text-align: right;">54.9</td>
-<td style="text-align: right;">3.5</td>
+<td style="text-align: right;">27.9</td>
+<td style="text-align: right;">14.0</td>
+<td style="text-align: right;">52.3</td>
+<td style="text-align: right;">3.4</td>
 <td style="text-align: right;">1.7</td>
-<td style="text-align: right;">6.8</td>
-<td style="text-align: right;">68.9</td>
-<td style="text-align: right;">42.1</td>
+<td style="text-align: right;">6.5</td>
+<td style="text-align: right;">69.6</td>
+<td style="text-align: right;">44.7</td>
 <td style="text-align: right;">84.5</td>
-<td style="text-align: right;">7.7</td>
-<td style="text-align: right;">4.7</td>
+<td style="text-align: right;">7.8</td>
+<td style="text-align: right;">4.8</td>
 <td style="text-align: right;">10.4</td>
 </tr>
 <tr class="odd">
 <td style="text-align: right;">7</td>
-<td style="text-align: right;">21.7</td>
-<td style="text-align: right;">12.4</td>
-<td style="text-align: right;">36.9</td>
-<td style="text-align: right;">2.7</td>
-<td style="text-align: right;">1.5</td>
-<td style="text-align: right;">4.7</td>
-<td style="text-align: right;">76.2</td>
-<td style="text-align: right;">60.1</td>
-<td style="text-align: right;">86.2</td>
-<td style="text-align: right;">8.5</td>
+<td style="text-align: right;">21.3</td>
+<td style="text-align: right;">12.3</td>
+<td style="text-align: right;">35.1</td>
+<td style="text-align: right;">2.6</td>
+<td style="text-align: right;">1.4</td>
+<td style="text-align: right;">4.5</td>
+<td style="text-align: right;">76.6</td>
+<td style="text-align: right;">62.2</td>
+<td style="text-align: right;">86.4</td>
+<td style="text-align: right;">8.6</td>
 <td style="text-align: right;">6.4</td>
-<td style="text-align: right;">10.8</td>
+<td style="text-align: right;">10.9</td>
 </tr>
 <tr class="even">
 <td style="text-align: right;">8</td>
-<td style="text-align: right;">19.5</td>
-<td style="text-align: right;">11.9</td>
-<td style="text-align: right;">30.4</td>
+<td style="text-align: right;">19.3</td>
+<td style="text-align: right;">11.8</td>
+<td style="text-align: right;">29.9</td>
 <td style="text-align: right;">2.4</td>
 <td style="text-align: right;">1.4</td>
-<td style="text-align: right;">4.0</td>
-<td style="text-align: right;">78.6</td>
-<td style="text-align: right;">66.9</td>
-<td style="text-align: right;">86.7</td>
+<td style="text-align: right;">3.9</td>
+<td style="text-align: right;">78.7</td>
+<td style="text-align: right;">67.7</td>
+<td style="text-align: right;">87.0</td>
+<td style="text-align: right;">8.9</td>
+<td style="text-align: right;">6.8</td>
+<td style="text-align: right;">11.1</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">9</td>
+<td style="text-align: right;">19.5</td>
+<td style="text-align: right;">12.3</td>
+<td style="text-align: right;">29.7</td>
+<td style="text-align: right;">2.4</td>
+<td style="text-align: right;">1.4</td>
+<td style="text-align: right;">3.8</td>
+<td style="text-align: right;">78.5</td>
+<td style="text-align: right;">67.8</td>
+<td style="text-align: right;">86.4</td>
 <td style="text-align: right;">8.8</td>
 <td style="text-align: right;">6.8</td>
 <td style="text-align: right;">11.0</td>
 </tr>
-<tr class="odd">
-<td style="text-align: right;">9</td>
-<td style="text-align: right;">19.6</td>
-<td style="text-align: right;">12.3</td>
-<td style="text-align: right;">29.7</td>
-<td style="text-align: right;">2.4</td>
-<td style="text-align: right;">1.5</td>
-<td style="text-align: right;">3.9</td>
-<td style="text-align: right;">78.5</td>
-<td style="text-align: right;">67.7</td>
-<td style="text-align: right;">86.3</td>
-<td style="text-align: right;">8.8</td>
-<td style="text-align: right;">6.9</td>
-<td style="text-align: right;">10.9</td>
-</tr>
 <tr class="even">
 <td style="text-align: right;">10</td>
-<td style="text-align: right;">21.1</td>
+<td style="text-align: right;">21.0</td>
 <td style="text-align: right;">13.3</td>
-<td style="text-align: right;">31.5</td>
+<td style="text-align: right;">31.6</td>
 <td style="text-align: right;">2.6</td>
-<td style="text-align: right;">1.6</td>
+<td style="text-align: right;">1.5</td>
 <td style="text-align: right;">4.1</td>
-<td style="text-align: right;">76.8</td>
-<td style="text-align: right;">65.6</td>
+<td style="text-align: right;">76.9</td>
+<td style="text-align: right;">65.8</td>
 <td style="text-align: right;">85.2</td>
 <td style="text-align: right;">8.6</td>
 <td style="text-align: right;">6.7</td>
-<td style="text-align: right;">10.7</td>
+<td style="text-align: right;">10.8</td>
 </tr>
 <tr class="odd">
 <td style="text-align: right;">11</td>
-<td style="text-align: right;">23.6</td>
+<td style="text-align: right;">23.5</td>
 <td style="text-align: right;">15.1</td>
-<td style="text-align: right;">34.7</td>
+<td style="text-align: right;">34.9</td>
 <td style="text-align: right;">2.9</td>
 <td style="text-align: right;">1.8</td>
 <td style="text-align: right;">4.5</td>
-<td style="text-align: right;">74.2</td>
-<td style="text-align: right;">62.5</td>
-<td style="text-align: right;">83.2</td>
+<td style="text-align: right;">74.3</td>
+<td style="text-align: right;">62.4</td>
+<td style="text-align: right;">83.3</td>
 <td style="text-align: right;">8.3</td>
 <td style="text-align: right;">6.4</td>
-<td style="text-align: right;">10.4</td>
+<td style="text-align: right;">10.5</td>
 </tr>
 <tr class="even">
 <td style="text-align: right;">12</td>
-<td style="text-align: right;">26.7</td>
+<td style="text-align: right;">26.8</td>
 <td style="text-align: right;">17.5</td>
 <td style="text-align: right;">38.7</td>
 <td style="text-align: right;">3.3</td>
 <td style="text-align: right;">2.1</td>
-<td style="text-align: right;">4.9</td>
-<td style="text-align: right;">70.8</td>
-<td style="text-align: right;">58.4</td>
-<td style="text-align: right;">80.6</td>
-<td style="text-align: right;">7.9</td>
-<td style="text-align: right;">6.1</td>
+<td style="text-align: right;">5.0</td>
+<td style="text-align: right;">70.9</td>
+<td style="text-align: right;">58.5</td>
+<td style="text-align: right;">80.7</td>
+<td style="text-align: right;">8.0</td>
+<td style="text-align: right;">6.0</td>
 <td style="text-align: right;">10.1</td>
 </tr>
 <tr class="odd">
 <td style="text-align: right;">13</td>
 <td style="text-align: right;">30.4</td>
-<td style="text-align: right;">20.3</td>
+<td style="text-align: right;">20.4</td>
 <td style="text-align: right;">42.9</td>
 <td style="text-align: right;">3.7</td>
 <td style="text-align: right;">2.4</td>
 <td style="text-align: right;">5.5</td>
 <td style="text-align: right;">67.0</td>
-<td style="text-align: right;">54.0</td>
-<td style="text-align: right;">77.7</td>
+<td style="text-align: right;">54.1</td>
+<td style="text-align: right;">77.6</td>
 <td style="text-align: right;">7.5</td>
-<td style="text-align: right;">5.7</td>
-<td style="text-align: right;">9.6</td>
+<td style="text-align: right;">5.6</td>
+<td style="text-align: right;">9.7</td>
 </tr>
 <tr class="even">
 <td style="text-align: right;">14</td>
 <td style="text-align: right;">34.5</td>
 <td style="text-align: right;">23.7</td>
-<td style="text-align: right;">47.6</td>
+<td style="text-align: right;">47.4</td>
 <td style="text-align: right;">4.2</td>
 <td style="text-align: right;">2.7</td>
-<td style="text-align: right;">6.0</td>
-<td style="text-align: right;">62.8</td>
-<td style="text-align: right;">49.4</td>
-<td style="text-align: right;">74.0</td>
-<td style="text-align: right;">7.0</td>
+<td style="text-align: right;">6.1</td>
+<td style="text-align: right;">62.7</td>
+<td style="text-align: right;">49.6</td>
+<td style="text-align: right;">74.1</td>
+<td style="text-align: right;">7.1</td>
 <td style="text-align: right;">5.2</td>
-<td style="text-align: right;">9.1</td>
+<td style="text-align: right;">9.2</td>
 </tr>
 <tr class="odd">
 <td style="text-align: right;">15</td>
 <td style="text-align: right;">38.7</td>
 <td style="text-align: right;">27.3</td>
-<td style="text-align: right;">52.2</td>
+<td style="text-align: right;">51.9</td>
 <td style="text-align: right;">4.7</td>
 <td style="text-align: right;">3.1</td>
+<td style="text-align: right;">6.7</td>
+<td style="text-align: right;">58.3</td>
+<td style="text-align: right;">45.1</td>
+<td style="text-align: right;">70.3</td>
 <td style="text-align: right;">6.6</td>
-<td style="text-align: right;">58.4</td>
-<td style="text-align: right;">44.8</td>
-<td style="text-align: right;">70.2</td>
-<td style="text-align: right;">6.5</td>
-<td style="text-align: right;">4.8</td>
-<td style="text-align: right;">8.6</td>
+<td style="text-align: right;">4.7</td>
+<td style="text-align: right;">8.7</td>
 </tr>
 <tr class="even">
 <td style="text-align: right;">16</td>
-<td style="text-align: right;">43.0</td>
-<td style="text-align: right;">30.9</td>
-<td style="text-align: right;">56.6</td>
+<td style="text-align: right;">43.1</td>
+<td style="text-align: right;">31.0</td>
+<td style="text-align: right;">56.2</td>
 <td style="text-align: right;">5.2</td>
 <td style="text-align: right;">3.5</td>
 <td style="text-align: right;">7.2</td>
-<td style="text-align: right;">54.0</td>
-<td style="text-align: right;">40.5</td>
-<td style="text-align: right;">66.5</td>
+<td style="text-align: right;">53.9</td>
+<td style="text-align: right;">40.8</td>
+<td style="text-align: right;">66.3</td>
 <td style="text-align: right;">6.1</td>
-<td style="text-align: right;">4.4</td>
-<td style="text-align: right;">8.0</td>
+<td style="text-align: right;">4.3</td>
+<td style="text-align: right;">8.1</td>
 </tr>
 <tr class="odd">
 <td style="text-align: right;">17</td>
-<td style="text-align: right;">47.3</td>
+<td style="text-align: right;">47.4</td>
 <td style="text-align: right;">34.9</td>
-<td style="text-align: right;">60.7</td>
-<td style="text-align: right;">5.6</td>
+<td style="text-align: right;">60.5</td>
+<td style="text-align: right;">5.7</td>
 <td style="text-align: right;">3.9</td>
 <td style="text-align: right;">7.8</td>
-<td style="text-align: right;">49.8</td>
-<td style="text-align: right;">36.5</td>
-<td style="text-align: right;">62.5</td>
+<td style="text-align: right;">49.6</td>
+<td style="text-align: right;">36.8</td>
+<td style="text-align: right;">62.4</td>
 <td style="text-align: right;">5.6</td>
 <td style="text-align: right;">3.9</td>
-<td style="text-align: right;">7.5</td>
+<td style="text-align: right;">7.6</td>
 </tr>
 <tr class="even">
 <td style="text-align: right;">18</td>
-<td style="text-align: right;">51.2</td>
+<td style="text-align: right;">51.4</td>
 <td style="text-align: right;">38.7</td>
-<td style="text-align: right;">64.3</td>
+<td style="text-align: right;">64.2</td>
 <td style="text-align: right;">6.1</td>
 <td style="text-align: right;">4.3</td>
-<td style="text-align: right;">8.2</td>
-<td style="text-align: right;">45.8</td>
-<td style="text-align: right;">33.0</td>
-<td style="text-align: right;">58.6</td>
+<td style="text-align: right;">8.3</td>
+<td style="text-align: right;">45.6</td>
+<td style="text-align: right;">33.2</td>
+<td style="text-align: right;">58.4</td>
 <td style="text-align: right;">5.1</td>
-<td style="text-align: right;">3.6</td>
-<td style="text-align: right;">7.0</td>
+<td style="text-align: right;">3.5</td>
+<td style="text-align: right;">7.1</td>
 </tr>
 <tr class="odd">
 <td style="text-align: right;">19</td>
-<td style="text-align: right;">54.9</td>
-<td style="text-align: right;">42.1</td>
-<td style="text-align: right;">67.7</td>
+<td style="text-align: right;">55.1</td>
+<td style="text-align: right;">42.3</td>
+<td style="text-align: right;">67.5</td>
 <td style="text-align: right;">6.5</td>
 <td style="text-align: right;">4.7</td>
 <td style="text-align: right;">8.7</td>
-<td style="text-align: right;">42.2</td>
-<td style="text-align: right;">29.7</td>
-<td style="text-align: right;">54.9</td>
+<td style="text-align: right;">42.0</td>
+<td style="text-align: right;">30.0</td>
+<td style="text-align: right;">54.7</td>
 <td style="text-align: right;">4.7</td>
 <td style="text-align: right;">3.2</td>
-<td style="text-align: right;">6.5</td>
+<td style="text-align: right;">6.6</td>
 </tr>
 <tr class="even">
 <td style="text-align: right;">20</td>
-<td style="text-align: right;">58.3</td>
-<td style="text-align: right;">45.4</td>
-<td style="text-align: right;">70.7</td>
+<td style="text-align: right;">58.4</td>
+<td style="text-align: right;">45.6</td>
+<td style="text-align: right;">70.4</td>
 <td style="text-align: right;">6.9</td>
-<td style="text-align: right;">5.1</td>
+<td style="text-align: right;">5.0</td>
 <td style="text-align: right;">9.1</td>
-<td style="text-align: right;">38.8</td>
-<td style="text-align: right;">26.9</td>
-<td style="text-align: right;">51.5</td>
+<td style="text-align: right;">38.7</td>
+<td style="text-align: right;">27.2</td>
+<td style="text-align: right;">51.3</td>
 <td style="text-align: right;">4.3</td>
 <td style="text-align: right;">2.9</td>
 <td style="text-align: right;">6.1</td>
@@ -1201,17 +1201,17 @@ leave-one-study out analysis to see if the results changed.
 <tr class="odd">
 <td style="text-align: right;">21</td>
 <td style="text-align: right;">61.4</td>
-<td style="text-align: right;">48.6</td>
-<td style="text-align: right;">73.2</td>
+<td style="text-align: right;">48.9</td>
+<td style="text-align: right;">72.9</td>
 <td style="text-align: right;">7.2</td>
-<td style="text-align: right;">5.4</td>
-<td style="text-align: right;">9.4</td>
+<td style="text-align: right;">5.3</td>
+<td style="text-align: right;">9.5</td>
 <td style="text-align: right;">35.8</td>
-<td style="text-align: right;">24.5</td>
-<td style="text-align: right;">48.5</td>
+<td style="text-align: right;">24.8</td>
+<td style="text-align: right;">48.0</td>
 <td style="text-align: right;">4.0</td>
-<td style="text-align: right;">2.7</td>
-<td style="text-align: right;">5.8</td>
+<td style="text-align: right;">2.6</td>
+<td style="text-align: right;">5.7</td>
 </tr>
 </tbody>
 </table>
